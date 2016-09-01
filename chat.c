@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h> // exit();
 #include <string.h>
-#include <strings.h> // bzero();
+#include <strings.h> // bzero() && bcopy()
 #include <stdbool.h>
 // ** needed directives for socket programming** //
 #include <sys/types.h>
@@ -21,26 +21,21 @@
 
 // function prototypes:
 void help_message();
-void server(const int port, const char* IP);
+void server();
 void client(const int port, const char* IP);
 int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
 int good_ip_addr(const char* ip);
 
-#define DEBUG false
+#define DEBUG true
 #define MESSAGE_SIZE 140
 #define h_addr h_addr_list[0] /* for backward compatibility */
 
 
 int main(int argc, char *argv[]){
 
-  int port_number = atoi(argv[2]);
-  // printf("%d\n", port_number);
-  char *IP = argv[4];
-  // printf("%s\n", IP);
-
-  switch(argc){
+    switch(argc){
   case 1:
-    server(port_number, IP);
+    server();
     break;
   case 2:
     help_message();
@@ -91,23 +86,23 @@ int good_ip_addr(const char* ip){
   return res != 0;
 }
 
-void server(const int port, const char* ip){
+void server(){
   /* All the code to run the server */
-  
+
   printf("Welcome to Chat!\n");
-  printf("Waiting for a connection on %s port %d\n", ip, port);
+  // printf("Waiting for a connection on %s port %d\n", ip, port);
 
   // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
   int socketfd,newsocketfd, rec, sent;
   socklen_t client_size;
-  
+
   // Messages can only be 140 characters long:
   char message_buffer[MESSAGE_SIZE];
 
-  // allocate a socket descriptor:  
+  // allocate a socket descriptor:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
-  if(DEBUG) printf("A socket file descriptor is nothing but an int. %d\n", socketfd); 
+  if(DEBUG) printf("A socket file descriptor is nothing but an int. %d\n", socketfd);
   // checking that I obtain the socket file descriptor:
   if(socketfd == -1 ){
     printf("Couldn't create the socket\n");
@@ -134,10 +129,10 @@ void server(const int port, const char* ip){
     printf("Couldn't create the client socket. There was an error on accept.\n");
     exit(1);
   }
-  
+
   // writing values of bytes in the buffer to 0
   bzero(message_buffer, 140);
-  
+
   // Lets recieve the data!
   rec = recv(newsocketfd, message_buffer, 140, 0);
   if( rec < 0 ){
@@ -154,7 +149,7 @@ void server(const int port, const char* ip){
     printf("Wasn't able to send data... ERROR writing to the socket.\n");
     exit(0);
   }
- 
+
   // now closing sockets:
   close(newsocketfd);
   close(socketfd);
@@ -163,10 +158,10 @@ void server(const int port, const char* ip){
 
 void client(const int port, const char* ip){
   /* All code for the client */
-  
+
   int socketfd, port_number, sent, rec;
   struct sockaddr_in server_addr;
-  struct in_addr ipstr;
+  struct in_addr sa;
   struct hostent *the_server; // this is a struct with many host related inqueries.
 
   char client_buffer[MESSAGE_SIZE];
@@ -174,20 +169,20 @@ void client(const int port, const char* ip){
   // obtain the port number:
   port_number = port;
   if(DEBUG) printf("The client side, the port is: %d\n", port_number);
-  
+
   // create the socket:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
   if(socketfd == -1){
-    printf("Erroe creating socket..\n");
+    printf("Error creating socket..\n");
     exit(1);
   }
 
-  if( !inet_aton(ip, &ipstr) ){
+  /*if( !inet_aton(ip, &ipstr) ){
     printf("Can't parse the IP address %s\n", ip);
     exit(1);
-  }
+    }*/
 
-  if ((the_server = gethostbyaddr((const void *)&ipstr,sizeof ipstr, AF_INET)) == NULL)
+  if ((the_server = gethostbyaddr( (const void *)&sa, sizeof(sa), AF_INET)) == NULL )
     printf("no name associated with %s", ip);
 
   if(DEBUG) printf("name associated with %s is %s\n", ip, the_server->h_name);
@@ -195,9 +190,9 @@ void client(const int port, const char* ip){
   bzero( (char *) &server_addr, sizeof(server_addr) );
 
   server_addr.sin_family = AF_INET;
-  bcopy( (char *) the_server->h_addr, (char *) &ipstr, the_server->h_length);
+  bcopy( (char *) the_server->h_addr, (char *) &server_addr.sin_addr.s_addr, the_server->h_length);
   server_addr.sin_port = htons(port);
-  
+
   // connecting to the server now..
   if( connect(socketfd, (struct sockaddr *) &server_addr, sizeof(server_addr) ) == -1 ){
     printf("Error connecting to the server\n");
@@ -208,7 +203,7 @@ void client(const int port, const char* ip){
   printf("You: \n");
   bzero(client_buffer, MESSAGE_SIZE);
   fgets(client_buffer, MESSAGE_SIZE, stdin);
-  
+
   sent = send(socketfd, client_buffer, sizeof(client_buffer), 0);
   if(sent == -1){
     printf("Error sending message to the server...\n");
@@ -216,7 +211,7 @@ void client(const int port, const char* ip){
   }
 
   bzero(client_buffer, MESSAGE_SIZE);
-  
+
   rec = recv(socketfd, client_buffer, MESSAGE_SIZE, 0);
   if( rec == -1){
     printf("Error recieving the data from the server...\n");
@@ -227,5 +222,5 @@ void client(const int port, const char* ip){
 
   // close the socket:
   close(socketfd);
-  
+
 }
