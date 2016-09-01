@@ -26,10 +26,8 @@ void client(const int port, const char* IP);
 int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
 int good_ip_addr(const char* ip);
 
-#define DEBUG true
+#define DEBUG false
 #define MESSAGE_SIZE 140
-#define h_addr h_addr_list[0] /* for backward compatibility */
-
 
 int main(int argc, char *argv[]){
 
@@ -38,7 +36,9 @@ int main(int argc, char *argv[]){
   
     switch(argc){
   case 1:
-    //server();
+    port = atoi(argv[2]);
+    IP = argv[4];
+    server(IP, port);
     break;
   case 2:
     help_message();
@@ -95,7 +95,7 @@ void server(const char *ip_addr, const int port){
   /* All the code to run the server */
 
   printf("Welcome to Chat!\n");
-  // printf("Waiting for a connection on %s port %d\n", ip, port);
+  printf("Waiting for a connection on %s port %d\n", ip_addr, port);
 
   // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
@@ -166,8 +166,7 @@ void client(const int port, const char* ip){
 
   int socketfd, port_number, sent, rec;
   struct sockaddr_in server_addr;
-  struct in_addr ia;
-  struct hostent *the_server; // this is a struct with many host related inqueries.
+  // struct hostent *the_server; // this is a struct with many host related inqueries.
 
   char client_buffer[MESSAGE_SIZE];
 
@@ -182,30 +181,34 @@ void client(const int port, const char* ip){
     exit(1);
   }
 
-  if( !inet_aton(ip, &ia) ){
+  /*if( !inet_aton(ip, &ia) ){
     printf("Can't parse the IP address %s\n", ip);
     exit(1);
-    }
+    }*/
 
-  if ((the_server = gethostbyaddr( (const void *)&ia, sizeof(ia), AF_INET)) == NULL )
-    printf("no name associated with %s", ip);
+  /*if ((the_server = gethostbyaddr( (const void *)&ia, sizeof(ia), AF_INET)) == NULL )
+    printf("no name associated with %s", ip);*/
 
-  if(DEBUG) printf("name associated with %s is %s\n", ip, the_server->h_name);
+  // if(DEBUG) printf("name associated with %s is %s\n", ip, the_server->h_name);
 
   bzero( (char *) &server_addr, sizeof(server_addr) );
 
-  printf("The length of ia is: %zu\n", the_server->h_length );
-  
   server_addr.sin_family = AF_INET;
-  bcopy( (char *) the_server->h_addr, (char *) &server_addr.sin_addr.s_addr, the_server->h_length);
-  server_addr.sin_port = htons(port);
+  server_addr.sin_addr.s_addr = inet_pton(AF_INET, ip, &(server_addr.sin_addr) ); // convert readable IP to bits
 
+  
+  // bcopy( (char *) the_server->h_addr, (char *) &server_addr.sin_addr, the_server->h_length);
+
+  server_addr.sin_port = htons(port);
+  
   // connecting to the server now..
-  if( connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1 ){
+  if( connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr) ) < 0 ){
     printf("Error connecting to the server\n");
     exit(1);
   }
 
+  puts("Connected?");
+  
   // client enters in their message:
   printf("You: \n");
   bzero(client_buffer, MESSAGE_SIZE);
