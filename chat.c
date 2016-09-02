@@ -102,7 +102,8 @@ void server(){
 
   // Messages can only be 140 characters long:
   char message_buffer[MESSAGE_SIZE];
-
+  char str[1000];
+  
   // allocate a socket descriptor:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
   if(DEBUG) printf("A socket file descriptor is nothing but an int. %d\n", socketfd);
@@ -118,6 +119,7 @@ void server(){
   server_addr.sin_addr.s_addr = INADDR_ANY;  /* puts server's IP automatically */
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
+
   // binding socket to specified port number:
   if( bind(socketfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1 ){ // means it failed to bind... 0 on success, -1 if not
     printf("Couldn't bind the port to the socket!\n");
@@ -128,9 +130,10 @@ void server(){
     printf("Coudn't listen...\n");
     exit(1);
   }
-
-
-  printf("Waiting for a connection on address %d port %d\n", server_addr.sin_addr.s_addr, PORT);
+  
+  // now get it back and print it:
+  inet_ntop(AF_INET, &(server_addr.sin_addr), str, 1000);
+  printf("Waiting for a connection on address %s port %d\n", str, PORT);
   
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
