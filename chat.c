@@ -21,24 +21,23 @@
 
 // function prototypes:
 void help_message();
-void server(char* ip_addr, int port);
-void client(int port, char* IP);
-int good_port(int  port); // going to use the struct sockaddr_in --> inet_pton();
-int good_ip_addr(char* ip);
+void server();
+void client(const int port, const char* IP);
+int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
+int good_ip_addr(const char* ip);
 
-#define DEBUG true
+#define DEBUG false
 #define MESSAGE_SIZE 140
+#define PORT 51717
 
 int main(int argc, char *argv[]){
 
   int port;
   char *IP;
   
-    switch(argc){
+  switch(argc){
   case 1:
-    port = atoi(argv[2]);
-    IP = argv[4];
-    server(IP, port);
+    server();
     break;
   case 2:
     help_message();
@@ -75,7 +74,7 @@ void help_message(){
   exit(0);
 }
 
-int good_port(int port){
+int good_port(const int port){
   // use ports withing the range: 49152 - 65535
   // All ports below 1024 are RESERVED
   if(port >= 49152 && port <= 65535){
@@ -84,18 +83,17 @@ int good_port(int port){
   return 0;
 }
 
-int good_ip_addr(char* ip){
+int good_ip_addr(const char* ip){
   struct sockaddr_in sa;
   // IP address format conversion --> inet_pton :: convert IP address from dot notation to 32 bit binary.
   int res = inet_pton(AF_INET, ip, &(sa.sin_addr) );
   return res != 0;
 }
 
-void server(char *ip_addr, int port){
+void server(){
   /* All the code to run the server */
 
   printf("Welcome to Chat!\n");
-  printf("Waiting for a connection on %s port %d\n", ip_addr, port);
 
   // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
@@ -113,16 +111,16 @@ void server(char *ip_addr, int port){
     printf("Couldn't create the socket\n");
     exit(1);
   }
-  // clearing out any data that remains in the server_addr:
+
   // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
-  // testing...
   server_addr.sin_family = AF_INET; // IPv4
-  server_addr.sin_addr.s_addr = inet_addr(ip_addr);  /* puts server's IP automatically */
-  server_addr.sin_port = htons(port);
+  server_addr.sin_addr.s_addr = INADDR_ANY;  /* puts server's IP automatically */
+  // As talked about in class, we hardcode this port value.
+  server_addr.sin_port = htons(51717); // <-- convert to BigEndian
   // binding socket to specified port number:
   if( bind(socketfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1 ){ // means it failed to bind... 0 on success, -1 if not
-    printf("Couldn't ding the port to the socket!");
+    printf("Couldn't bind the port to the socket!\n");
     exit(1);
   }
   // The listen system call allows the process to listen on the socket for connections.
@@ -131,6 +129,9 @@ void server(char *ip_addr, int port){
     exit(1);
   }
 
+
+  printf("Waiting for a connection on address %d port %d\n", server_addr.sin_addr.s_addr, PORT);
+  
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
   if(newsocketfd == -1){
@@ -152,7 +153,7 @@ void server(char *ip_addr, int port){
   printf("Friend: %s\n", message_buffer);
 
   // writing back...
-  sent = send(newsocketfd, "You: I recieved your message!", 140, 0);
+  sent = send(newsocketfd, "I recieved your message!", 140, 0);
   if(sent < 0){
     printf("Wasn't able to send data... ERROR writing to the socket.\n");
     exit(0);
@@ -164,11 +165,12 @@ void server(char *ip_addr, int port){
 
 }
 
-void client(int port, char* ip){
+void client(const int port, const char* ip){
   /* All code for the client */
 
   int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
+  struct in_addr inaddr;
   
   char client_buffer[MESSAGE_SIZE];
   
@@ -186,7 +188,8 @@ void client(int port, char* ip){
   bzero( (char *) &server_addr, sizeof(server_addr) );
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_addr(ip);
+  inet_pton(AF_INET, ip, &(inaddr) );
+  server_addr.sin_addr.s_addr = inaddr.s_addr;
   server_addr.sin_port = htons(port);
   
   // connecting to the server now..
@@ -200,7 +203,7 @@ void client(int port, char* ip){
   printf("Connected to a friend! You send first.\n");
 
   // client enters in their message:
-  printf("You: \n");
+  printf("You: ");
   bzero(client_buffer, MESSAGE_SIZE);
   fgets(client_buffer, MESSAGE_SIZE, stdin);
 
