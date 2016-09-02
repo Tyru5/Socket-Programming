@@ -21,12 +21,12 @@
 
 // function prototypes:
 void help_message();
-void server(const char* ip_addr, const int port);
-void client(const int port, const char* IP);
-int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
-int good_ip_addr(const char* ip);
+void server(char* ip_addr, int port);
+void client(int port, char* IP);
+int good_port(int  port); // going to use the struct sockaddr_in --> inet_pton();
+int good_ip_addr(char* ip);
 
-#define DEBUG false
+#define DEBUG true
 #define MESSAGE_SIZE 140
 
 int main(int argc, char *argv[]){
@@ -75,7 +75,7 @@ void help_message(){
   exit(0);
 }
 
-int good_port(const int port){
+int good_port(int port){
   // use ports withing the range: 49152 - 65535
   // All ports below 1024 are RESERVED
   if(port >= 49152 && port <= 65535){
@@ -84,14 +84,14 @@ int good_port(const int port){
   return 0;
 }
 
-int good_ip_addr(const char* ip){
+int good_ip_addr(char* ip){
   struct sockaddr_in sa;
   // IP address format conversion --> inet_pton :: convert IP address from dot notation to 32 bit binary.
   int res = inet_pton(AF_INET, ip, &(sa.sin_addr) );
   return res != 0;
 }
 
-void server(const char *ip_addr, const int port){
+void server(char *ip_addr, int port){
   /* All the code to run the server */
 
   printf("Welcome to Chat!\n");
@@ -118,7 +118,7 @@ void server(const char *ip_addr, const int port){
   bzero( (char*) &server_addr, sizeof(server_addr) );
   // testing...
   server_addr.sin_family = AF_INET; // IPv4
-  server_addr.sin_addr.s_addr = INADDR_ANY;  /* puts server's IP automatically */
+  server_addr.sin_addr.s_addr = inet_addr(ip_addr);  /* puts server's IP automatically */
   server_addr.sin_port = htons(port);
   // binding socket to specified port number:
   if( bind(socketfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == -1 ){ // means it failed to bind... 0 on success, -1 if not
@@ -126,7 +126,10 @@ void server(const char *ip_addr, const int port){
     exit(1);
   }
   // The listen system call allows the process to listen on the socket for connections.
-  listen(socketfd,1);
+  if(listen(socketfd,1) == -1 ){
+    printf("Coudn't listen...\n");
+    exit(1);
+  }
 
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
@@ -161,60 +164,47 @@ void server(const char *ip_addr, const int port){
 
 }
 
-void client(const int port, const char* ip){
+void client(int port, char* ip){
   /* All code for the client */
 
-  int socketfd, port_number, sent, rec;
+  int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
-  // struct hostent *the_server; // this is a struct with many host related inqueries.
-
+  
   char client_buffer[MESSAGE_SIZE];
-
+  
   // obtain the port number:
   port_number = port;
   if(DEBUG) printf("The client side, the port is: %d\n", port_number);
 
   // create the socket:
-  socketfd = socket(AF_INET, SOCK_STREAM, 0);
-  if(socketfd == -1){
+  clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+  if(clientSocket == -1){
     printf("Error creating socket..\n");
     exit(1);
   }
 
-  /*if( !inet_aton(ip, &ia) ){
-    printf("Can't parse the IP address %s\n", ip);
-    exit(1);
-    }*/
-
-  /*if ((the_server = gethostbyaddr( (const void *)&ia, sizeof(ia), AF_INET)) == NULL )
-    printf("no name associated with %s", ip);*/
-
-  // if(DEBUG) printf("name associated with %s is %s\n", ip, the_server->h_name);
-
   bzero( (char *) &server_addr, sizeof(server_addr) );
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_pton(AF_INET, ip, &(server_addr.sin_addr) ); // convert readable IP to bits
-
-  
-  // bcopy( (char *) the_server->h_addr, (char *) &server_addr.sin_addr, the_server->h_length);
-
+  server_addr.sin_addr.s_addr = inet_addr(ip);
   server_addr.sin_port = htons(port);
   
   // connecting to the server now..
-  if( connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr) ) < 0 ){
+  if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) < 0 ){
     printf("Error connecting to the server\n");
     exit(1);
   }
 
-  puts("Connected?");
-  
+  // if connected, display this messgae:
+  printf("Connecting to server... Connected!\n");
+  printf("Connected to a friend! You send first.\n");
+
   // client enters in their message:
   printf("You: \n");
   bzero(client_buffer, MESSAGE_SIZE);
   fgets(client_buffer, MESSAGE_SIZE, stdin);
 
-  sent = send(socketfd, client_buffer, sizeof(client_buffer), 0);
+  sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0);
   if(sent == -1){
     printf("Error sending message to the server...\n");
     exit(1);
@@ -222,7 +212,7 @@ void client(const int port, const char* ip){
 
   bzero(client_buffer, MESSAGE_SIZE);
 
-  rec = recv(socketfd, client_buffer, MESSAGE_SIZE, 0);
+  rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0);
   if( rec == -1){
     printf("Error recieving the data from the server...\n");
     exit(1);
@@ -231,6 +221,6 @@ void client(const int port, const char* ip){
   printf("Friend: %s\n", client_buffer);
 
   // close the socket:
-  close(socketfd);
+  close(clientSocket);
 
 }
