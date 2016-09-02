@@ -116,7 +116,8 @@ void server(){
   // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
-  server_addr.sin_addr.s_addr = INADDR_ANY;  /* puts server's IP automatically */
+  // server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  /* puts server's IP automatically */
+  server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  /* puts server's IP automatically */
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -133,7 +134,7 @@ void server(){
   
   // now get it back and print it:
   inet_ntop(AF_INET, &(server_addr.sin_addr), str, 1000);
-  printf("Waiting for a connection on address %s port %d\n", str, PORT);
+  printf("Waiting for a connection on %s port %d\n", str, PORT);
   
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
@@ -144,17 +145,14 @@ void server(){
 
   // writing values of bytes in the buffer to 0
   bzero(message_buffer, 140);
-
   // Lets recieve the data!
   rec = recv(newsocketfd, message_buffer, 140, 0);
   if( rec < 0 ){
     printf("Error recieving the data...\n");
     exit(1);
   }
-
   // printing out the data sent from the client:
   printf("Friend: %s\n", message_buffer);
-
   // writing back...
   sent = send(newsocketfd, "I recieved your message!", 140, 0);
   if(sent < 0){
