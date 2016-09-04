@@ -117,7 +117,7 @@ void server(){
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
   // server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  /* puts server's IP automatically */
-  server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);  /* puts server's IP automatically */
+  server_addr.sin_addr.s_addr = ;  /* puts server's IP automatically */
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
