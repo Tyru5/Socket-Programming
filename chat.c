@@ -142,6 +142,8 @@ void server(){
     exit(1);
   }
 
+  // printf("Client Adress = %s",inet_ntop(AF_INET, &client_addr.sin_addr, clientname ,client_size ) );
+  
   // writing values of bytes in the buffer to 0
   bzero(message_buffer, 140);
   // Lets recieve the data!
