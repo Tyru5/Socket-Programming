@@ -116,8 +116,7 @@ void server(){
   // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
-  // server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  /* puts server's IP automatically */
-  server_addr.sin_addr.s_addr = ;  /* puts server's IP automatically */
+  server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  /* puts server's IP automatically */
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -131,7 +130,7 @@ void server(){
     printf("Coudn't listen...\n");
     exit(1);
   }
-  
+
   // now get it back and print it:
   inet_ntop(AF_INET, &(server_addr.sin_addr), str, 1000);
   printf("Waiting for a connection on %s port %d\n", str, PORT);
