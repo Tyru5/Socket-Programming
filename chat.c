@@ -17,7 +17,6 @@
 #include <netinet/in.h> // struct sockaddr_in is defined in.
 #include <arpa/inet.h> // inet_pton();
 #include <unistd.h> // for closing file descriptor
-#include <netdb.h> //  for hostnet services
 
 // function prototypes:
 void help_message();
