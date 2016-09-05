@@ -9,7 +9,7 @@ OBJS		= ${C_OBJS}
 EXE	        = chat
 
 # Compiler and loader commands and flags
-CC		= c99
+CC		= gcc
 CC_FLAGS	= -g -O0 -Wall -c
 LD_FLAGS	= -g -Wall
 

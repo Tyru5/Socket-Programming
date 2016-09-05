@@ -17,6 +17,7 @@
 #include <netinet/in.h> // struct sockaddr_in is defined in.
 #include <arpa/inet.h> // inet_pton();
 #include <unistd.h> // for closing file descriptor
+#include <netdb.h>
 
 // function prototypes:
 void help_message();
@@ -24,6 +25,7 @@ void server();
 void client(const int port, const char* IP);
 int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
 int good_ip_addr(const char* ip);
+int hostname_to_ip(char * hostname, char *ip);
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
@@ -101,8 +103,7 @@ void server(){
 
   // Messages can only be 140 characters long:
   char message_buffer[MESSAGE_SIZE];
-  char str[1000];
-  
+
   // allocate a socket descriptor:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
   if(DEBUG) printf("A socket file descriptor is nothing but an int. %d\n", socketfd);
@@ -112,10 +113,39 @@ void server(){
     exit(1);
   }
 
+  
   // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
-  server_addr.sin_addr.s_addr = htonl(INADDR_ANY);  /* puts server's IP automatically */
+
+  struct addrinfo hints, *info, *p;
+  int gai_result;
+
+  char hostname[1024];
+  hostname[1023] = '\0';
+  gethostname(hostname, 1023);
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC; /*either IPV4 or IPV6*/
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_CANONNAME;
+
+  if ((gai_result = getaddrinfo(hostname, "51717", &hints, &info)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_result));
+    exit(1);
+  }
+
+  for(p = info; p != NULL; p = p->ai_next) {
+    printf("hostname: %s\n", p->ai_canonname);
+  }
+
+  freeaddrinfo(info);
+
+  char ip[100];
+     
+  hostname_to_ip(hostname , ip);
+  inet_pton(AF_INET, ip, &(server_addr.sin_addr) ); 
+  // server_addr.sin_addr.s_addr = ;
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -130,9 +160,7 @@ void server(){
     exit(1);
   }
 
-  // now get it back and print it:
-  inet_ntop(AF_INET, &(server_addr.sin_addr), str, 1000);
-  printf("Waiting for a connection on %s port %d\n", str, PORT);
+  printf("Waiting for a connection on %s port %d\n", ip, PORT);
   
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
@@ -141,7 +169,6 @@ void server(){
     exit(1);
   }
 
-  // printf("Client Adress = %s",inet_ntop(AF_INET, &client_addr.sin_addr, clientname ,client_size ) );
   
   // writing values of bytes in the buffer to 0
   bzero(message_buffer, 140);
@@ -227,4 +254,28 @@ void client(const int port, const char* ip){
   // close the socket:
   close(clientSocket);
 
+}
+
+int hostname_to_ip(char * hostname , char* ip){
+  struct hostent *he;
+  struct in_addr **addr_list;
+  int i;
+         
+  if ( (he = gethostbyname( hostname ) ) == NULL) 
+    {
+      // get the host info
+      herror("gethostbyname");
+      return 1;
+    }
+ 
+  addr_list = (struct in_addr **) he->h_addr_list;
+     
+  for(i = 0; addr_list[i] != NULL; i++) 
+    {
+      //Return the first one;
+      strcpy(ip , inet_ntoa(*addr_list[i]) );
+      return 0;
+    }
+     
+  return 1;
 }
