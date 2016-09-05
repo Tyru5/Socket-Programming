@@ -197,7 +197,8 @@ void client(const int port, const char* ip){
 
   int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
-  struct in_addr inaddr;
+  // struct in_addr inaddr;
+
   
   char client_buffer[MESSAGE_SIZE];
   
@@ -215,8 +216,9 @@ void client(const int port, const char* ip){
   bzero( (char *) &server_addr, sizeof(server_addr) );
 
   server_addr.sin_family = AF_INET;
-  inet_pton(AF_INET, ip, &(inaddr) );
-  server_addr.sin_addr.s_addr = inaddr.s_addr;
+  // inet_pton(AF_INET, ip, &(inaddr) );
+  // server_addr.sin_addr.s_addr = inaddr.s_addr;
+  server_addr.sin_addr.s_addr = inet_addr(ip);
   server_addr.sin_port = htons(port);
   
   // connecting to the server now..
