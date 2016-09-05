@@ -216,7 +216,7 @@ void client(const int port, const char* ip){
 
   server_addr.sin_family = AF_INET;
   inet_pton(AF_INET, ip, &(inaddr) );
-  server_addr.sin_addr.s_addr = inet_addr("127.0.1.1");
+  server_addr.sin_addr.s_addr = inaddr.s_addr;
   server_addr.sin_port = htons(port);
   
   // connecting to the server now..
