@@ -136,7 +136,7 @@ void server(){
   }
 
   for(p = info; p != NULL; p = p->ai_next) {
-    printf("hostname: %s\n", p->ai_canonname);
+    // printf("hostname: %s\n", p->ai_canonname);
   }
 
   freeaddrinfo(info);
@@ -145,7 +145,6 @@ void server(){
      
   hostname_to_ip(hostname , ip);
   inet_pton(AF_INET, ip, &(server_addr.sin_addr) ); 
-  // server_addr.sin_addr.s_addr = ;
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
