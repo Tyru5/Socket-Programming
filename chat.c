@@ -273,7 +273,7 @@ int hostname_to_ip(char * hostname , char* ip){
      
   for(i = 0; addr_list[i] != NULL; i++) 
     {
-      //Return the first one;
+      // Return the first one;
       strcpy(ip , inet_ntoa(*addr_list[i]) );
       return 0;
     }
