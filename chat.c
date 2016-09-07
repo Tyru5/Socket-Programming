@@ -27,7 +27,7 @@ int good_port(const int  port); // going to use the struct sockaddr_in --> inet_
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
 
-#define DEBUG true
+#define DEBUG false
 #define MESSAGE_SIZE 140
 #define PORT 51717
 
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]){
 
   int port;
   char *IP;
-  
+
   switch(argc){
   case 1:
     server();
@@ -113,7 +113,7 @@ void server(){
     exit(1);
   }
 
-  
+
   // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
@@ -142,9 +142,9 @@ void server(){
   freeaddrinfo(info);
 
   char ip[100];
-     
+
   hostname_to_ip(hostname , ip);
-  inet_pton(AF_INET, ip, &(server_addr.sin_addr) ); 
+  inet_pton(AF_INET, ip, &(server_addr.sin_addr) );
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -160,7 +160,7 @@ void server(){
   }
 
   printf("Waiting for a connection on %s port %d\n", ip, PORT);
-  
+
   client_size = sizeof(client_addr);
   newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
   if(newsocketfd == -1){
@@ -168,7 +168,7 @@ void server(){
     exit(1);
   }
 
-  
+
   // writing values of bytes in the buffer to 0
   bzero(message_buffer, 140);
   // Lets recieve the data!
@@ -199,9 +199,9 @@ void client(const int port, const char* ip){
   struct sockaddr_in server_addr;
   // struct in_addr inaddr;
 
-  
+
   char client_buffer[MESSAGE_SIZE];
-  
+
   // obtain the port number:
   port_number = port;
   if(DEBUG) printf("The client side, the port is: %d\n", port_number);
@@ -220,7 +220,7 @@ void client(const int port, const char* ip){
   // server_addr.sin_addr.s_addr = inaddr.s_addr;
   server_addr.sin_addr.s_addr = inet_addr(ip);
   server_addr.sin_port = htons(port);
-  
+
   // connecting to the server now..
   if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) < 0 ){
     printf("Error connecting to the server\n");
@@ -261,22 +261,22 @@ int hostname_to_ip(char * hostname , char* ip){
   struct hostent *he;
   struct in_addr **addr_list;
   int i;
-         
-  if ( (he = gethostbyname( hostname ) ) == NULL) 
+
+  if ( (he = gethostbyname( hostname ) ) == NULL)
     {
       // get the host info
       herror("gethostbyname");
       return 1;
     }
- 
+
   addr_list = (struct in_addr **) he->h_addr_list;
-     
-  for(i = 0; addr_list[i] != NULL; i++) 
+
+  for(i = 0; addr_list[i] != NULL; i++)
     {
       // Return the first one;
       strcpy(ip , inet_ntoa(*addr_list[i]) );
       return 0;
     }
-     
+
   return 1;
 }
