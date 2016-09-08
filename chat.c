@@ -20,10 +20,8 @@
 #include <netdb.h>
 
 typedef struct port_ip{
-
   char *ip;
   int port;
-  
 } Ip_Port;
 
 // function prototypes:
@@ -163,6 +161,7 @@ void server(){
     printf("Couldn't create the client socket. There was an error on accept.\n");
     exit(1);
   }
+
   
   while(1){
     
@@ -173,7 +172,7 @@ void server(){
       printf("Error recieving the data...\n");
       exit(1);
     }
-    
+
     // printing out the data sent from the client:
     printf("Friend: %s", server_buffer);
     // writing back...
