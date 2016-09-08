@@ -288,5 +288,8 @@ void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
     if( strcmp(argv[i], "-p") == 0) ipp->port = atoi(argv[i+1]);
     if( strcmp(argv[i], "-s") == 0) ipp->ip   = argv[i+1];
   }
+
+  // printf("port = %d\n", ipp->port);
+  // printf("ip = %s\n",   ipp->ip);
   
 }
