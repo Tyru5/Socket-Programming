@@ -98,11 +98,13 @@ void server(){
 
   // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
-  int socketfd,newsocketfd, rec, sent;
+  struct addrinfo hints, *info, *p;
+
+  int socketfd,client_file_descriptor, rec, sent, gai_result;
   socklen_t client_size;
 
   // Messages can only be 140 characters long:
-  char message_buffer[MESSAGE_SIZE];
+  char server_buffer[MESSAGE_SIZE];
 
   // allocate a socket descriptor:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -118,9 +120,6 @@ void server(){
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET; // IPv4
 
-  struct addrinfo hints, *info, *p;
-  int gai_result;
-
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
@@ -130,7 +129,7 @@ void server(){
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_CANONNAME;
 
-  if ((gai_result = getaddrinfo(hostname, "51717", &hints, &info)) != 0) {
+  if ( (gai_result = getaddrinfo(hostname, "51717", &hints, &info)) != 0 ) {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_result));
     exit(1);
   }
@@ -145,6 +144,7 @@ void server(){
 
   hostname_to_ip(hostname , ip);
   inet_pton(AF_INET, ip, &(server_addr.sin_addr) );
+  
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -161,34 +161,44 @@ void server(){
 
   printf("Waiting for a connection on %s port %d\n", ip, PORT);
 
-  client_size = sizeof(client_addr);
-  newsocketfd = accept(socketfd, (struct sockaddr *) &client_addr, &client_size);
-  if(newsocketfd == -1){
-    printf("Couldn't create the client socket. There was an error on accept.\n");
-    exit(1);
-  }
 
+  // Make server listen indefinitely:
+  while(1){
 
-  // writing values of bytes in the buffer to 0
-  bzero(message_buffer, 140);
-  // Lets recieve the data!
-  rec = recv(newsocketfd, message_buffer, 140, 0);
-  if( rec < 0 ){
-    printf("Error recieving the data...\n");
-    exit(1);
-  }
-  // printing out the data sent from the client:
-  printf("Friend: %s\n", message_buffer);
-  // writing back...
-  sent = send(newsocketfd, "I recieved your message!", 140, 0);
-  if(sent < 0){
-    printf("Wasn't able to send data... ERROR writing to the socket.\n");
-    exit(0);
-  }
+    client_size = sizeof(client_addr);
 
-  // now closing sockets:
-  close(newsocketfd);
-  close(socketfd);
+    if( (client_file_descriptor = accept(socketfd, (struct sockaddr *) &client_addr, &client_size)) == -1 ){
+      printf("Couldn't create the client socket. There was an error on accept.\n");
+      exit(1);
+    }
+
+    while(1){
+
+      // writing values of bytes in the buffer to 0
+      bzero(server_buffer, MESSAGE_SIZE);
+      // Lets recieve the data!
+      if( ( rec = recv(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1 ){
+	printf("Error recieving the data...\n");
+	exit(1);
+      }
+      
+      // printing out the data sent from the client:
+      printf("Friend: %s\n", server_buffer);
+      // writing back...
+      bzero(server_buffer, MESSAGE_SIZE);
+      fgets(server_buffer, MESSAGE_SIZE, stdin);
+      if( (sent = send(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1){
+	printf("Wasn't able to send data... ERROR writing to the socket.\n");
+	exit(1);
+      }
+      
+    } // done with inner while.
+    
+    close(client_file_descriptor);
+
+  } // done with outer while.
+  
+  close(socketfd);  
 
 }
 
@@ -214,15 +224,12 @@ void client(const int port, const char* ip){
   }
 
   bzero( (char *) &server_addr, sizeof(server_addr) );
-
   server_addr.sin_family = AF_INET;
-  // inet_pton(AF_INET, ip, &(inaddr) );
-  // server_addr.sin_addr.s_addr = inaddr.s_addr;
   server_addr.sin_addr.s_addr = inet_addr(ip);
   server_addr.sin_port = htons(port);
 
   // connecting to the server now..
-  if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) < 0 ){
+  if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1 ){
     printf("Error connecting to the server\n");
     exit(1);
   }
@@ -231,28 +238,30 @@ void client(const int port, const char* ip){
   printf("Connecting to server... Connected!\n");
   printf("Connected to a friend! You send first.\n");
 
-  // client enters in their message:
-  printf("You: ");
-  bzero(client_buffer, MESSAGE_SIZE);
-  fgets(client_buffer, MESSAGE_SIZE, stdin);
 
-  sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0);
-  if(sent == -1){
-    printf("Error sending message to the server...\n");
-    exit(1);
-  }
-
-  bzero(client_buffer, MESSAGE_SIZE);
-
-  rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0);
-  if( rec == -1){
-    printf("Error recieving the data from the server...\n");
-    exit(1);
-  }
-
-  printf("Friend: %s\n", client_buffer);
-
-  // close the socket:
+  // chat for an indefinite amount of time:
+  while(1){
+    // client enters in their message:
+    printf("You: ");
+    bzero(client_buffer, MESSAGE_SIZE);
+    fgets(client_buffer, MESSAGE_SIZE, stdin);
+    
+    if( ( sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0) ) == -1 ){
+      printf("Error sending message to the server...\n");
+      exit(1);
+    }else{
+    
+      bzero(client_buffer, MESSAGE_SIZE); // why?
+    
+      if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
+      printf("Error recieving the data from the server...\n");
+      exit(1);
+      }
+    
+      printf("Friend: %s\n", client_buffer);
+    }
+  } // end of while.
+  
   close(clientSocket);
 
 }
