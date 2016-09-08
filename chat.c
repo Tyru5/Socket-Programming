@@ -163,43 +163,41 @@ void server(){
 
 
   // Make server listen indefinitely:
+  client_size = sizeof(client_addr);
+  
+  if( (client_file_descriptor = accept(socketfd, (struct sockaddr *) &client_addr, &client_size)) == -1 ){
+    printf("Couldn't create the client socket. There was an error on accept.\n");
+    exit(1);
+  }
+  
   while(1){
-
-    client_size = sizeof(client_addr);
-
-    if( (client_file_descriptor = accept(socketfd, (struct sockaddr *) &client_addr, &client_size)) == -1 ){
-      printf("Couldn't create the client socket. There was an error on accept.\n");
+    
+    // writing values of bytes in the buffer to 0
+    bzero(server_buffer, MESSAGE_SIZE);
+    // Lets recieve the data!
+    if( ( rec = recv(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1 ){
+      printf("Error recieving the data...\n");
       exit(1);
     }
-
-    while(1){
-
-      // writing values of bytes in the buffer to 0
-      bzero(server_buffer, MESSAGE_SIZE);
-      // Lets recieve the data!
-      if( ( rec = recv(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1 ){
-	printf("Error recieving the data...\n");
-	exit(1);
-      }
-      
-      // printing out the data sent from the client:
-      printf("Friend: %s\n", server_buffer);
-      // writing back...
-      bzero(server_buffer, MESSAGE_SIZE);
-      fgets(server_buffer, MESSAGE_SIZE, stdin);
-      if( (sent = send(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1){
-	printf("Wasn't able to send data... ERROR writing to the socket.\n");
-	exit(1);
-      }
-      
-    } // done with inner while.
     
-    close(client_file_descriptor);
-
-  } // done with outer while.
+    // printing out the data sent from the client:
+    printf("Friend: %s", server_buffer);
+    // writing back...
+    printf("You: ");
+    bzero(server_buffer, MESSAGE_SIZE);
+    fgets(server_buffer, MESSAGE_SIZE, stdin);
+    
+    
+    if( (sent = send(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1){
+      printf("Wasn't able to send data... ERROR writing to the socket.\n");
+      exit(1);
+    }
+    
+  } // done with while.
   
+  close(client_file_descriptor);
   close(socketfd);  
-
+    
 }
 
 void client(const int port, const char* ip){
@@ -249,17 +247,17 @@ void client(const int port, const char* ip){
     if( ( sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
-    }else{
+    }
     
-      bzero(client_buffer, MESSAGE_SIZE); // why?
+    bzero(client_buffer, MESSAGE_SIZE);
     
-      if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
+    if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
-      }
-    
-      printf("Friend: %s\n", client_buffer);
     }
+    
+    printf("Friend: %s", client_buffer);
+    
   } // end of while.
   
   close(clientSocket);
