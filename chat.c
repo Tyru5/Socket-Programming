@@ -19,6 +19,13 @@
 #include <unistd.h> // for closing file descriptor
 #include <netdb.h>
 
+typedef struct port_ip{
+
+  char *ip;
+  int port;
+  
+} Ip_Port;
+
 // function prototypes:
 void help_message();
 void server();
@@ -26,6 +33,7 @@ void client(const int port, const char* IP);
 int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
+void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
@@ -33,8 +41,10 @@ int hostname_to_ip(char * hostname, char *ip);
 
 int main(int argc, char *argv[]){
 
-  int port;
-  char *IP;
+
+  Ip_Port ipp;
+  
+  process_cargs(argc, argv, &ipp );
 
   switch(argc){
   case 1:
@@ -44,19 +54,7 @@ int main(int argc, char *argv[]){
     help_message();
     break;
   case 5:
-    port = atoi(argv[2]);
-    if(DEBUG) printf("The port number passed was: %d\n", port);
-    if( !(good_port(port)) ){
-      printf("That is not a valid port number! Please enter that in again.\n");
-      return -1;
-    }
-    IP = argv[4];
-    if(DEBUG) printf("The IP address that was passed was: %s\n", IP);
-    if( !(good_ip_addr(IP)) ){
-      printf("That is not a valid IP address! Please enter that in again.\n");
-      return -1;
-    }
-    client(port, IP);
+    client(ipp.port, ipp.ip);
     break;
   default:
     help_message();
@@ -286,4 +284,13 @@ int hostname_to_ip(char * hostname , char* ip){
     }
 
   return 1;
+}
+
+void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
+  
+  for(int i = 0; i < argc; i++){
+    if( strcmp(argv[i], "-p") == 0) ipp->port = atoi(argv[i+1]);
+    if( strcmp(argv[i], "-s") == 0) ipp->ip   = argv[i+1];
+  }
+  
 }
