@@ -96,7 +96,7 @@ void server(){
 
   // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
-  struct addrinfo hints, *info, *p;
+  struct addrinfo hints, *info;
 
   int socketfd,client_file_descriptor, rec, sent, gai_result;
   socklen_t client_size;
@@ -130,10 +130,6 @@ void server(){
   if ( (gai_result = getaddrinfo(hostname, "51717", &hints, &info)) != 0 ) {
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_result));
     exit(1);
-  }
-
-  for(p = info; p != NULL; p = p->ai_next) {
-    // printf("hostname: %s\n", p->ai_canonname);
   }
 
   freeaddrinfo(info);
