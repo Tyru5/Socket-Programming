@@ -43,7 +43,7 @@ int main(int argc, char *argv[]){
   Ip_Port ipp;
   
   process_cargs(argc, argv, &ipp );
-
+  
   switch(argc){
   case 1:
     server();
@@ -52,6 +52,15 @@ int main(int argc, char *argv[]){
     help_message();
     break;
   case 5:
+    // Sanity Checking inputs:
+    if( !good_port(ipp.port) ){
+      printf("Please enter a valid port\n");
+      exit(1);
+    }
+    if( !good_ip_addr(ipp.ip) ){
+      printf("Please enter a valid ip address\n");
+      exit(1);
+    }
     client(ipp.port, ipp.ip);
     break;
   default:
