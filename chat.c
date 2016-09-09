@@ -81,7 +81,7 @@ void help_message(){
 }
 
 int good_port(const int port){
-  // use ports withing the range: 49152 - 65535
+  // use ports withing the range: 1024 - 65535
   // All ports below 1024 are RESERVED
   if(port >= 1024 && port <= 65535){
     return 1;
