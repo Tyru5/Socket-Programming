@@ -32,6 +32,9 @@ int good_port(const int  port); // going to use the struct sockaddr_in --> inet_
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
 void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
+// function to handle signals:
+void sig_handler(int signal);
+
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
@@ -271,12 +274,11 @@ int hostname_to_ip(char * hostname , char* ip){
   struct in_addr **addr_list;
   int i;
 
-  if ( (he = gethostbyname( hostname ) ) == NULL)
-    {
-      // get the host info
-      herror("gethostbyname");
-      return 1;
-    }
+  if ( (he = gethostbyname( hostname ) ) == NULL){
+    // get the host info
+    herror("gethostbyname");
+    return 1;
+  }
 
   addr_list = (struct in_addr **) he->h_addr_list;
 
@@ -300,4 +302,10 @@ void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
   // printf("port = %d\n", ipp->port);
   // printf("ip = %s\n",   ipp->ip);
   
+}
+
+void sig_handler(int signal){
+  
+  
+
 }
