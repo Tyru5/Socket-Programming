@@ -18,6 +18,7 @@
 #include <arpa/inet.h> // inet_pton();
 #include <unistd.h> // for closing file descriptor
 #include <netdb.h>
+#include <signal.h> // for the signal() function.
 
 typedef struct port_ip{
   char *ip;
@@ -44,9 +45,9 @@ int main(int argc, char *argv[]){
 
 
   Ip_Port ipp;
-  
+
   process_cargs(argc, argv, &ipp );
-  
+
   switch(argc){
   case 1:
     server();
@@ -148,7 +149,7 @@ void server(){
 
   hostname_to_ip(hostname , ip);
   inet_pton(AF_INET, ip, &(server_addr.sin_addr) );
-  
+
   // As talked about in class, we hardcode this port value.
   server_addr.sin_port = htons(51717); // <-- convert to BigEndian
 
@@ -168,15 +169,15 @@ void server(){
 
   // Make server listen indefinitely:
   client_size = sizeof(client_addr);
-  
+
   if( (client_file_descriptor = accept(socketfd, (struct sockaddr *) &client_addr, &client_size)) == -1 ){
     printf("Couldn't create the client socket. There was an error on accept.\n");
     exit(1);
   }
 
-  
+
   while(1){
-    
+
     // writing values of bytes in the buffer to 0
     bzero(server_buffer, MESSAGE_SIZE);
     // Lets recieve the data!
@@ -191,18 +192,20 @@ void server(){
     printf("You: ");
     bzero(server_buffer, MESSAGE_SIZE);
     fgets(server_buffer, MESSAGE_SIZE, stdin);
-    
-    
+
+
     if( (sent = send(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1){
       printf("Wasn't able to send data... ERROR writing to the socket.\n");
       exit(1);
     }
-    
+
   } // done with while.
-  
+
   close(client_file_descriptor);
-  close(socketfd);  
-    
+  close(socketfd);
+
+  // signal(SIGINT, sig_handler);
+
 }
 
 void client(const int port, const char* ip){
@@ -248,23 +251,23 @@ void client(const int port, const char* ip){
     printf("You: ");
     bzero(client_buffer, MESSAGE_SIZE);
     fgets(client_buffer, MESSAGE_SIZE, stdin);
-    
+
     if( ( sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
     }
-    
+
     bzero(client_buffer, MESSAGE_SIZE);
-    
+
     if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
     }
-    
+
     printf("Friend: %s", client_buffer);
-    
+
   } // end of while.
-  
+
   close(clientSocket);
 
 }
@@ -293,7 +296,7 @@ int hostname_to_ip(char * hostname , char* ip){
 }
 
 void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
-  
+
   for(int i = 0; i < argc; i++){
     if( strcmp(argv[i], "-p") == 0) ipp->port = atoi(argv[i+1]);
     if( strcmp(argv[i], "-s") == 0) ipp->ip   = argv[i+1];
@@ -301,11 +304,5 @@ void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
 
   // printf("port = %d\n", ipp->port);
   // printf("ip = %s\n",   ipp->ip);
-  
-}
-
-void sig_handler(int signal){
-  
-  
 
 }
