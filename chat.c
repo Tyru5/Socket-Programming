@@ -25,6 +25,15 @@ typedef struct port_ip{
   int port;
 } Ip_Port;
 
+typedef struct packet_info{
+  // version:
+  short version;
+  // String length, 16 bits:
+  short string_length;
+  // actual message:
+  char *message;  
+} Packet;
+
 // function prototypes:
 void help_message();
 void server();
@@ -34,8 +43,8 @@ int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
 void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
 // function to handle signals:
-void sig_handler(int signal);
-
+void sig_handler(const int signal);
+void free_packet(Packet *pkt);
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
@@ -114,6 +123,11 @@ void server(){
 
   // Messages can only be 140 characters long:
   char server_buffer[MESSAGE_SIZE];
+
+
+  // function that handles interrupts:
+  // signal( SIGINT, sig_handler(client_file_descriptor, socketfd) )
+
 
   // allocate a socket descriptor:
   socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -204,8 +218,6 @@ void server(){
   close(client_file_descriptor);
   close(socketfd);
 
-  // signal(SIGINT, sig_handler);
-
 }
 
 void client(const int port, const char* ip){
@@ -213,8 +225,6 @@ void client(const int port, const char* ip){
 
   int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
-  // struct in_addr inaddr;
-
 
   char client_buffer[MESSAGE_SIZE];
 
@@ -245,12 +255,20 @@ void client(const int port, const char* ip){
   printf("Connected to a friend! You send first.\n");
 
 
+  // create Packet then initialize it:
+  Packet *client_packet =  malloc( sizeof(*client_packet) );
+  client_packet->version = 457;
+  
   // chat for an indefinite amount of time:
   while(1){
     // client enters in their message:
     printf("You: ");
     bzero(client_buffer, MESSAGE_SIZE);
-    fgets(client_buffer, MESSAGE_SIZE, stdin);
+    
+    char *input_string = fgets(client_buffer, MESSAGE_SIZE, stdin);
+    printf("Length of the string is: %lu\n", strlen(input_string) );
+    client_packet->string_length = strlen(input_string);
+    client_packet->message = malloc( sizeof(char) * client_packet->string_length);
 
     if( ( sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
@@ -268,6 +286,7 @@ void client(const int port, const char* ip){
 
   } // end of while.
 
+  free_packet(client_packet);
   close(clientSocket);
 
 }
@@ -305,4 +324,16 @@ void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
   // printf("port = %d\n", ipp->port);
   // printf("ip = %s\n",   ipp->ip);
 
+}
+
+
+void sig_handler(const int signal){
+  
+}
+
+
+void free_packet(Packet *pkt){
+  // free anything in struct and struct itself:
+  free(pkt->message);
+  free(pkt);
 }
