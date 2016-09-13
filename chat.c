@@ -199,14 +199,16 @@ void server(){
     // Lets recieve the data!
 
     Packet *recv_packet = malloc( sizeof(*recv_packet) );
-    unsigned char recv_buffer[ sizeof(recv_packet) ];
+    unsigned char recv_buffer[ sizeof(*recv_packet) ];
+
+    // printf("size of the recv_buffer = %d\n", sizeof(recv_buffer) );
     
-    if( ( rec = recv(client_file_descriptor, &recv_buffer, sizeof(recv_packet), 0) ) == -1 ){
+    if( ( rec = recv(client_file_descriptor, recv_buffer, sizeof(recv_packet), 0) ) == -1 ){
       printf("Error recieving the data...\n");
       exit(1);
     }
 
-    memcpy( &recv_packet, &recv_buffer, sizeof(recv_packet) );
+    memcpy( recv_packet, recv_buffer, sizeof(*recv_packet) );
     
     // printing out the data sent from the client:
     printf("Friend: %s", recv_packet->message);
@@ -268,8 +270,6 @@ void client(const int port, const char* ip){
     printf("You: ");
     bzero(client_buffer, MESSAGE_SIZE);
 
-
-    
     // create Packet then initialize it:
     Packet *client_packet =  malloc( sizeof(*client_packet) );
     client_packet->version = 457;    
@@ -277,8 +277,8 @@ void client(const int port, const char* ip){
     // printf("Length of the string is: %lu\n", strlen(input_string) );
     client_packet->string_length = strlen(input_string);
     // create buffer to send over:
-    unsigned char send_buffer[ sizeof(client_packet) ];
-    memcpy( &send_buffer , &client_packet, sizeof(client_packet) );
+    unsigned char send_buffer[ sizeof(*client_packet) ];
+    memcpy( send_buffer , client_packet, sizeof(*client_packet) );
     
     if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
