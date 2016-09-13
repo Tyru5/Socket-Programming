@@ -45,6 +45,7 @@ void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
 // function to handle signals:
 void sig_handler(const int signal);
 void free_packet(Packet *pkt);
+void free_ip_port(Ip_Port *ipp);
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
@@ -53,10 +54,11 @@ void free_packet(Packet *pkt);
 int main(int argc, char *argv[]){
 
 
-  Ip_Port ipp;
+  Ip_Port *ipp = malloc( sizeof(Ip_Port) );
+  ipp->ip = malloc( sizeof(char) * INET_ADDRSTRLEN );
 
-  process_cargs(argc, argv, &ipp );
-
+  process_cargs(argc, argv, ipp );
+  
   switch(argc){
   case 1:
     server();
@@ -66,15 +68,16 @@ int main(int argc, char *argv[]){
     break;
   case 5:
     // Sanity Checking inputs:
-    if( !good_port(ipp.port) ){
+    if( !good_port(ipp->port) ){
       printf("Please enter a valid port\n");
       exit(1);
     }
-    if( !good_ip_addr(ipp.ip) ){
+    if( !good_ip_addr(ipp->ip) ){
       printf("Please enter a valid ip address\n");
       exit(1);
     }
-    client(ipp.port, ipp.ip);
+    client(ipp->port, ipp->ip);
+    free_ip_port(ipp);
     break;
   default:
     help_message();
@@ -336,4 +339,9 @@ void free_packet(Packet *pkt){
   // free anything in struct and struct itself:
   free(pkt->message);
   free(pkt);
+}
+
+void free_ip_port(Ip_Port *ipp){
+  free(ipp->ip);
+  free(ipp);
 }
