@@ -20,6 +20,10 @@
 #include <netdb.h>
 #include <signal.h> // for the signal() function.
 
+#define DEBUG false
+#define MESSAGE_SIZE 140
+#define PORT 51717
+
 typedef struct port_ip{
   char *ip;
   int port;
@@ -31,7 +35,7 @@ typedef struct packet_info{
   // String length, 16 bits:
   short string_length;
   // actual message:
-  char *message;  
+  char message[MESSAGE_SIZE];  
 } Packet;
 
 // function prototypes:
@@ -45,20 +49,16 @@ void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
 // function to handle signals:
 void sig_handler(const int signal);
 void free_packet(Packet *pkt);
-void free_ip_port(Ip_Port *ipp);
-
-#define DEBUG false
-#define MESSAGE_SIZE 140
-#define PORT 51717
+void free_ip_port(Ip_Port *p);
 
 int main(int argc, char *argv[]){
 
 
-  Ip_Port *ipp = malloc( sizeof(Ip_Port) );
+  Ip_Port *ipp = malloc( sizeof(*ipp) );
   ipp->ip = malloc( sizeof(char) * INET_ADDRSTRLEN );
 
   process_cargs(argc, argv, ipp );
-  
+
   switch(argc){
   case 1:
     server();
@@ -163,7 +163,6 @@ void server(){
   freeaddrinfo(info);
 
   char ip[100];
-
   hostname_to_ip(hostname , ip);
   inet_pton(AF_INET, ip, &(server_addr.sin_addr) );
 
@@ -198,13 +197,19 @@ void server(){
     // writing values of bytes in the buffer to 0
     bzero(server_buffer, MESSAGE_SIZE);
     // Lets recieve the data!
-    if( ( rec = recv(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1 ){
+
+    Packet *recv_packet = malloc( sizeof(*recv_packet) );
+    unsigned char recv_buffer[ sizeof(recv_packet) ];
+    
+    if( ( rec = recv(client_file_descriptor, &recv_buffer, sizeof(recv_packet), 0) ) == -1 ){
       printf("Error recieving the data...\n");
       exit(1);
     }
 
+    memcpy( &recv_packet, &recv_buffer, sizeof(recv_packet) );
+    
     // printing out the data sent from the client:
-    printf("Friend: %s", server_buffer);
+    printf("Friend: %s", recv_packet->message);
     // writing back...
     printf("You: ");
     bzero(server_buffer, MESSAGE_SIZE);
@@ -256,29 +261,32 @@ void client(const int port, const char* ip){
   // if connected, display this messgae:
   printf("Connecting to server... Connected!\n");
   printf("Connected to a friend! You send first.\n");
-
-
-  // create Packet then initialize it:
-  Packet *client_packet =  malloc( sizeof(*client_packet) );
-  client_packet->version = 457;
   
   // chat for an indefinite amount of time:
   while(1){
     // client enters in their message:
     printf("You: ");
     bzero(client_buffer, MESSAGE_SIZE);
-    
-    char *input_string = fgets(client_buffer, MESSAGE_SIZE, stdin);
-    printf("Length of the string is: %lu\n", strlen(input_string) );
-    client_packet->string_length = strlen(input_string);
-    client_packet->message = malloc( sizeof(char) * client_packet->string_length);
 
-    if( ( sent = send(clientSocket, client_buffer, sizeof(client_buffer), 0) ) == -1 ){
+
+    
+    // create Packet then initialize it:
+    Packet *client_packet =  malloc( sizeof(*client_packet) );
+    client_packet->version = 457;    
+    char *input_string = fgets(client_packet->message, MESSAGE_SIZE, stdin);
+    // printf("Length of the string is: %lu\n", strlen(input_string) );
+    client_packet->string_length = strlen(input_string);
+    // create buffer to send over:
+    unsigned char send_buffer[ sizeof(client_packet) ];
+    memcpy( &send_buffer , &client_packet, sizeof(client_packet) );
+    
+    if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
     }
-
+    
     bzero(client_buffer, MESSAGE_SIZE);
+    free_packet(client_packet);
 
     if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
@@ -286,10 +294,9 @@ void client(const int port, const char* ip){
     }
 
     printf("Friend: %s", client_buffer);
-
+    
   } // end of while.
 
-  free_packet(client_packet);
   close(clientSocket);
 
 }
@@ -321,9 +328,9 @@ void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
 
   for(int i = 0; i < argc; i++){
     if( strcmp(argv[i], "-p") == 0) ipp->port = atoi(argv[i+1]);
-    if( strcmp(argv[i], "-s") == 0) ipp->ip   = argv[i+1];
+    if( strcmp(argv[i], "-s") == 0) strcpy( ipp->ip, argv[i+1] ); // dest -> src
   }
-
+  
   // printf("port = %d\n", ipp->port);
   // printf("ip = %s\n",   ipp->ip);
 
@@ -337,11 +344,10 @@ void sig_handler(const int signal){
 
 void free_packet(Packet *pkt){
   // free anything in struct and struct itself:
-  free(pkt->message);
   free(pkt);
 }
 
-void free_ip_port(Ip_Port *ipp){
-  free(ipp->ip);
-  free(ipp);
+void free_ip_port(Ip_Port *p){
+  free(p->ip);
+  free(p);
 }
