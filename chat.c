@@ -274,34 +274,36 @@ void client(const int port, const char* ip){
     strcpy(client_packet->contents, "-s-s-cp");
     client_packet->version = 457;
     
-    char *input_string = fgets(client_packet->message, MESSAGE_SIZE, stdin);
-    printf("Length of the string is: %lu\n", strlen(input_string) );
-    printf("Length of the string is: %lu\n", sizeof(input_string) );
+    char message_buffer[MESSAGE_SIZE];
+
+    fgets(message_buffer, MESSAGE_SIZE, stdin);
+    strcpy(client_packet->message, message_buffer);
+    printf("Length of the string is: %lu\n", strlen(client_packet->message) );
     printf("message: %s\n", client_packet->message);
-    client_packet->string_length = (int) strlen(input_string);
+    client_packet->string_length = (int) strlen(client_packet->message);
     // create buffer to send over:
     unsigned char send_buffer[ sizeof(char) * 146 ];
     unsigned char recv_buffer[ sizeof(*client_packet) ];
     
     serialize(client_packet, send_buffer);
 
-    if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
+    /*if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
-    }
+      }
     
-    free_packet(client_packet);
+      free_packet(client_packet);
     
-    if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
+      if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
-    }
+      }
 
-    de_serialize(recv_buffer, recv_packet);
+      de_serialize(recv_buffer, recv_packet);
     
-    printf("Friend: %s", recv_packet->message);
+      printf("Friend: %s", recv_packet->message);
 
-    free_packet( recv_packet );
+      free_packet( recv_packet );*/
     
   } // end of while.
 
@@ -331,7 +333,9 @@ int hostname_to_ip(char * hostname , char* ip){
 
 void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
-  for(int i = 0; i < argc; i++){
+  int i = 0;
+
+  for(i = 0; i < argc; i++){
     if( strcmp(argv[i], "-p") == 0) *port = atoi(argv[i+1]);
     if( strcmp(argv[i], "-s") == 0) strcpy(ip, argv[i+1] );
   }
@@ -355,17 +359,17 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
   char subbuffer[3];
   memcpy( subbuffer, &(pkt->contents[0]) , 2);
   subbuffer[2] = '\0';
-  // printf("subbuffer = %s\n", subbuffer);
+  printf("subbuffer = %s\n", subbuffer);
 
   char subbuffer2[3];
   memcpy( subbuffer2, &(pkt->contents[2]) , 2);
   subbuffer2[2] = '\0';
-  // printf("subbuffer2 = %s\n", subbuffer2);
+  printf("subbuffer2 = %s\n", subbuffer2);
 
   char subbuffer3[4];
   memcpy( subbuffer3, &(pkt->contents[3]), 3);
   subbuffer3[3] = '\0';
-  // printf("subbuffer3 = %s\n", subbuffer3);
+  printf("subbuffer3 = %s\n", subbuffer3);
 
   if( strcmp(subbuffer, "-s") == 0 ){
     printf("out_buffer version = %d\n", sizeof(pkt->version) );
