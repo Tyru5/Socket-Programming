@@ -275,8 +275,9 @@ void client(const int port, const char* ip){
     client_packet->version = 457;
     
     char *input_string = fgets(client_packet->message, MESSAGE_SIZE, stdin);
-    // printf("Length of the string is: %lu\n", strlen(input_string) );
-    // printf("message: %s\n", client_packet->message);
+    printf("Length of the string is: %lu\n", strlen(input_string) );
+    printf("Length of the string is: %lu\n", sizeof(input_string) );
+    printf("message: %s\n", client_packet->message);
     client_packet->string_length = (int) strlen(input_string);
     // create buffer to send over:
     unsigned char send_buffer[ sizeof(char) * 146 ];
@@ -367,7 +368,7 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
   // printf("subbuffer3 = %s\n", subbuffer3);
 
   if( strcmp(subbuffer, "-s") == 0 ){
-    printf("out_buffer version = %d\n", pkt->version );
+    printf("out_buffer version = %d\n", sizeof(pkt->version) );
     memcpy( out_buffer, &(pkt->version) , sizeof(pkt->version) );
     printf("out_buffer version = %s\n", out_buffer);
   }
