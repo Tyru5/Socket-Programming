@@ -24,18 +24,15 @@
 #define MESSAGE_SIZE 140
 #define PORT 51717
 
-typedef struct port_ip{
-  char *ip;
-  int port;
-} Ip_Port;
-
 typedef struct packet_info{
+  // length 8 -> 1 for the null byte.
+  char contents[8];
   // version:
   short version;
   // String length, 16 bits:
   short string_length;
   // actual message:
-  char message[MESSAGE_SIZE];  
+  char *message;  
 } Packet;
 
 // function prototypes:
@@ -45,19 +42,20 @@ void client(const int port, const char* IP);
 int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
-void process_cargs(const int argc, char *argv[], Ip_Port *ipp);
+void process_cargs(const int argc, char *argv[], char *ip, int *port);
 // function to handle signals:
 void sig_handler(const int signal);
 void free_packet(Packet *pkt);
-void free_ip_port(Ip_Port *p);
+void serialize(Packet *pkt, unsigned char *out_buffer);
+void de_serialize(unsigned char *in_buffer, Packet *pkt);
 
 int main(int argc, char *argv[]){
 
 
-  Ip_Port *ipp = malloc( sizeof(*ipp) );
-  ipp->ip = malloc( sizeof(char) * INET_ADDRSTRLEN );
+  char *ip = malloc( sizeof(char) * INET_ADDRSTRLEN);
+  int port = 0;
 
-  process_cargs(argc, argv, ipp );
+  process_cargs(argc, argv, ip, &port );
 
   switch(argc){
   case 1:
@@ -68,16 +66,16 @@ int main(int argc, char *argv[]){
     break;
   case 5:
     // Sanity Checking inputs:
-    if( !good_port(ipp->port) ){
+    if( !good_port(port) ){
       printf("Please enter a valid port\n");
       exit(1);
     }
-    if( !good_ip_addr(ipp->ip) ){
+    if( !good_ip_addr(ip) ){
       printf("Please enter a valid ip address\n");
       exit(1);
     }
-    client(ipp->port, ipp->ip);
-    free_ip_port(ipp);
+    client(port, ip);
+    free(ip);
     break;
   default:
     help_message();
@@ -123,10 +121,6 @@ void server(){
 
   int socketfd,client_file_descriptor, rec, sent, gai_result;
   socklen_t client_size;
-
-  // Messages can only be 140 characters long:
-  char server_buffer[MESSAGE_SIZE];
-
 
   // function that handles interrupts:
   // signal( SIGINT, sig_handler(client_file_descriptor, socketfd) )
@@ -194,34 +188,40 @@ void server(){
 
   while(1){
 
-    // writing values of bytes in the buffer to 0
-    bzero(server_buffer, MESSAGE_SIZE);
-    // Lets recieve the data!
-
     Packet *recv_packet = malloc( sizeof(*recv_packet) );
+    Packet *send_packet = malloc( sizeof(*send_packet) );
+    recv_packet->message = malloc( sizeof(char)*140 );
     unsigned char recv_buffer[ sizeof(*recv_packet) ];
+    unsigned char send_buffer[ sizeof(*recv_packet) ];
 
-    // printf("size of the recv_buffer = %d\n", sizeof(recv_buffer) );
     
     if( ( rec = recv(client_file_descriptor, recv_buffer, sizeof(recv_packet), 0) ) == -1 ){
       printf("Error recieving the data...\n");
       exit(1);
     }
 
-    memcpy( recv_packet, recv_buffer, sizeof(*recv_packet) );
+    de_serialize(recv_buffer, recv_packet);
     
     // printing out the data sent from the client:
     printf("Friend: %s", recv_packet->message);
     // writing back...
     printf("You: ");
-    bzero(server_buffer, MESSAGE_SIZE);
-    fgets(server_buffer, MESSAGE_SIZE, stdin);
 
+    send_packet->version = 457;    
+    char *input_string = fgets(send_packet->message, MESSAGE_SIZE, stdin);
+    // printf("Length of the string is: %lu\n", strlen(input_string) );
+    send_packet->string_length = (int) strlen(input_string);
+    // create buffer to send over:    
 
-    if( (sent = send(client_file_descriptor, server_buffer, sizeof(server_buffer), 0) ) == -1){
+    serialize(send_packet, send_buffer);
+    
+    if( (sent = send(client_file_descriptor, send_buffer, sizeof(send_buffer), 0) ) == -1){
       printf("Wasn't able to send data... ERROR writing to the socket.\n");
       exit(1);
     }
+
+    free_packet( recv_packet );
+    free_packet( send_packet );
 
   } // done with while.
 
@@ -236,11 +236,10 @@ void client(const int port, const char* ip){
   int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
 
-  char client_buffer[MESSAGE_SIZE];
-
   // obtain the port number:
   port_number = port;
   if(DEBUG) printf("The client side, the port is: %d\n", port_number);
+  if(DEBUG) printf("The client side, the port is: %s\n", ip);
 
   // create the socket:
   clientSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -268,32 +267,40 @@ void client(const int port, const char* ip){
   while(1){
     // client enters in their message:
     printf("You: ");
-    bzero(client_buffer, MESSAGE_SIZE);
 
     // create Packet then initialize it:
     Packet *client_packet =  malloc( sizeof(*client_packet) );
-    client_packet->version = 457;    
+    Packet *recv_packet   = malloc( sizeof(*recv_packet) );
+    client_packet->message = malloc( sizeof(char) * 140 );
+    strcpy(client_packet->contents, "-s-s-cp");
+    client_packet->version = 457;
+    
     char *input_string = fgets(client_packet->message, MESSAGE_SIZE, stdin);
     // printf("Length of the string is: %lu\n", strlen(input_string) );
-    client_packet->string_length = strlen(input_string);
+    client_packet->string_length = (int) strlen(input_string);
     // create buffer to send over:
     unsigned char send_buffer[ sizeof(*client_packet) ];
-    memcpy( send_buffer , client_packet, sizeof(*client_packet) );
+    unsigned char recv_buffer[ sizeof(*client_packet) ];
+    
+    serialize(client_packet, send_buffer);
     
     if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
     }
     
-    bzero(client_buffer, MESSAGE_SIZE);
     free_packet(client_packet);
-
-    if( ( rec = recv(clientSocket, client_buffer, MESSAGE_SIZE, 0) ) == -1 ){
+    
+    if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
     }
 
-    printf("Friend: %s", client_buffer);
+    de_serialize(recv_buffer, recv_packet);
+    
+    printf("Friend: %s", recv_packet->message);
+
+    free_packet( recv_packet );
     
   } // end of while.
 
@@ -324,30 +331,55 @@ int hostname_to_ip(char * hostname , char* ip){
   return 1;
 }
 
-void process_cargs(const int argc, char *argv[],  Ip_Port *ipp){
+void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
   for(int i = 0; i < argc; i++){
-    if( strcmp(argv[i], "-p") == 0) ipp->port = atoi(argv[i+1]);
-    if( strcmp(argv[i], "-s") == 0) strcpy( ipp->ip, argv[i+1] ); // dest -> src
+    if( strcmp(argv[i], "-p") == 0) *port = atoi(argv[i+1]);
+    if( strcmp(argv[i], "-s") == 0) strcpy(ip, argv[i+1] );
   }
   
-  // printf("port = %d\n", ipp->port);
-  // printf("ip = %s\n",   ipp->ip);
+  // printf("port = %d\n", *port);
+  // printf("ip = %s\n",   ip);
 
 }
-
-
-void sig_handler(const int signal){
-  
-}
-
 
 void free_packet(Packet *pkt){
   // free anything in struct and struct itself:
+  free(pkt->message);
   free(pkt);
 }
 
-void free_ip_port(Ip_Port *p){
-  free(p->ip);
-  free(p);
+void serialize(Packet *pkt, unsigned char *out_buffer){
+
+  // printf("here is the string: %s\n", pkt->contents);
+
+  // essentially, C's substr...
+  char subbuffer[3];
+  memcpy( subbuffer, &pkt->contents[0] , 2);
+  subbuffer[2] = '\0';
+  // printf("subbuffer = %s\n", subbuffer);
+
+  char subbuffer2[3];
+  memcpy( subbuffer2, &pkt->contents[2] , 2);
+  subbuffer2[2] = '\0';
+  // printf("subbuffer2 = %s\n", subbuffer2);
+
+  char subbuffer3[4];
+  memcpy( subbuffer3, &pkt->contents[3], 3);
+  subbuffer3[3] = '\0';
+  // printf("subbuffer3 = %s\n", subbuffer3);
+
+  if( strcmp(subbuffer, "-s") ) memcpy( out_buffer, &pkt->version, sizeof(pkt->version) );
+  if( strcmp(subbuffer2,"-s") ) memcpy( (out_buffer + sizeof(pkt->version)) , &pkt->string_length, sizeof(pkt->string_length) );
+  if( strcmp(subbuffer3, "-cp") ) memcpy( (out_buffer + sizeof(pkt->version) + sizeof(pkt->string_length)) , pkt->message, sizeof(pkt->string_length) );  
+}
+
+
+void de_serialize(unsigned char *in_buffer, Packet *pkt){
+
+  // other way around:
+  memcpy( &pkt->version, &in_buffer[2], (sizeof(char)*2) );
+  memcpy( &pkt->string_length, &in_buffer[4], (sizeof(char)*2) );
+  memcpy( &pkt->message, &in_buffer[8], (sizeof(char)*8) );  
+  
 }
