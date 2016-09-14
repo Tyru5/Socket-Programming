@@ -4,7 +4,6 @@
 // Date: 8/31/2016
 // 'Simple' chat program
 
-
 // directives:
 #include <stdio.h>
 #include <stdlib.h> // exit();
@@ -277,13 +276,14 @@ void client(const int port, const char* ip){
     
     char *input_string = fgets(client_packet->message, MESSAGE_SIZE, stdin);
     // printf("Length of the string is: %lu\n", strlen(input_string) );
+    // printf("message: %s\n", client_packet->message);
     client_packet->string_length = (int) strlen(input_string);
     // create buffer to send over:
-    unsigned char send_buffer[ sizeof(*client_packet) ];
+    unsigned char send_buffer[ sizeof(char) * 146 ];
     unsigned char recv_buffer[ sizeof(*client_packet) ];
     
     serialize(client_packet, send_buffer);
-    
+
     if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
@@ -318,16 +318,13 @@ int hostname_to_ip(char * hostname , char* ip){
     herror("gethostbyname");
     return 1;
   }
-
   addr_list = (struct in_addr **) he->h_addr_list;
-
   for(i = 0; addr_list[i] != NULL; i++)
     {
       // Return the first one;
       strcpy(ip , inet_ntoa(*addr_list[i]) );
       return 0;
     }
-
   return 1;
 }
 
@@ -355,23 +352,32 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
 
   // essentially, C's substr...
   char subbuffer[3];
-  memcpy( subbuffer, &pkt->contents[0] , 2);
+  memcpy( subbuffer, &(pkt->contents[0]) , 2);
   subbuffer[2] = '\0';
   // printf("subbuffer = %s\n", subbuffer);
 
   char subbuffer2[3];
-  memcpy( subbuffer2, &pkt->contents[2] , 2);
+  memcpy( subbuffer2, &(pkt->contents[2]) , 2);
   subbuffer2[2] = '\0';
   // printf("subbuffer2 = %s\n", subbuffer2);
 
   char subbuffer3[4];
-  memcpy( subbuffer3, &pkt->contents[3], 3);
+  memcpy( subbuffer3, &(pkt->contents[3]), 3);
   subbuffer3[3] = '\0';
   // printf("subbuffer3 = %s\n", subbuffer3);
 
-  if( strcmp(subbuffer, "-s") ) memcpy( out_buffer, &pkt->version, sizeof(pkt->version) );
-  if( strcmp(subbuffer2,"-s") ) memcpy( (out_buffer + sizeof(pkt->version)) , &pkt->string_length, sizeof(pkt->string_length) );
-  if( strcmp(subbuffer3, "-cp") ) memcpy( (out_buffer + sizeof(pkt->version) + sizeof(pkt->string_length)) , pkt->message, sizeof(pkt->string_length) );  
+  if( strcmp(subbuffer, "-s") == 0 ){
+    printf("out_buffer version = %d\n", pkt->version );
+    memcpy( out_buffer, &(pkt->version) , sizeof(pkt->version) );
+    printf("out_buffer version = %s\n", out_buffer);
+  }
+  if( strcmp(subbuffer2,"-s") == 0 ){
+    memcpy( (out_buffer + sizeof(pkt->version)) , &(pkt->string_length), sizeof(pkt->string_length) );
+  }
+  if( strcmp(subbuffer3, "-cp") == 0 ){
+    memcpy( (out_buffer + sizeof(pkt->version) + sizeof(pkt->string_length)) , pkt->message, sizeof(pkt->string_length)+1 );
+  }
+  
 }
 
 
