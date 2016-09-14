@@ -385,10 +385,8 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
 
 
 void de_serialize(unsigned char *in_buffer, Packet *pkt){
-
   // other way around:
   memcpy( &(pkt->version), in_buffer, sizeof(short) );
   memcpy( &(pkt->string_length), (sizeof(short) + in_buffer) , sizeof(short) );
   memcpy( pkt->message, ( (sizeof(short) * 2) +  in_buffer), sizeof(pkt->string_length) );  
-  
 }
