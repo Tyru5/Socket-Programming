@@ -273,13 +273,12 @@ void client(const int port, const char* ip){
     client_packet->message = malloc( sizeof(char) * 140 );
     strcpy(client_packet->contents, "-s-s-cp");
     client_packet->version = 457;
-    
-    char message_buffer[MESSAGE_SIZE];
 
+    char message_buffer[MESSAGE_SIZE];
     fgets(message_buffer, MESSAGE_SIZE, stdin);
     strcpy(client_packet->message, message_buffer);
-    printf("Length of the string is: %lu\n", strlen(client_packet->message) );
-    printf("message: %s\n", client_packet->message);
+    // printf("Length of the string is: %lu\n", strlen(client_packet->message) );
+    // printf("message: %s\n", client_packet->message);
     client_packet->string_length = (int) strlen(client_packet->message);
     // create buffer to send over:
     unsigned char send_buffer[ sizeof(char) * 146 ];
@@ -287,23 +286,23 @@ void client(const int port, const char* ip){
     
     serialize(client_packet, send_buffer);
 
-    /*if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
+    if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
-      }
+    }
     
-      free_packet(client_packet);
+    free_packet(client_packet);
     
-      if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
+    if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
-      }
+    }
 
-      de_serialize(recv_buffer, recv_packet);
+    de_serialize(recv_buffer, recv_packet);
     
-      printf("Friend: %s", recv_packet->message);
+    printf("Friend: %s", recv_packet->message);
 
-      free_packet( recv_packet );*/
+    free_packet( recv_packet );
     
   } // end of while.
 
@@ -372,15 +371,14 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
   printf("subbuffer3 = %s\n", subbuffer3);
 
   if( strcmp(subbuffer, "-s") == 0 ){
-    printf("out_buffer version = %d\n", sizeof(pkt->version) );
+    // printf("out_buffer version = %d\n", sizeof(pkt->version) );
     memcpy( out_buffer, &(pkt->version) , sizeof(pkt->version) );
-    printf("out_buffer version = %s\n", out_buffer);
   }
   if( strcmp(subbuffer2,"-s") == 0 ){
     memcpy( (out_buffer + sizeof(pkt->version)) , &(pkt->string_length), sizeof(pkt->string_length) );
   }
   if( strcmp(subbuffer3, "-cp") == 0 ){
-    memcpy( (out_buffer + sizeof(pkt->version) + sizeof(pkt->string_length)) , pkt->message, sizeof(pkt->string_length)+1 );
+    memcpy( (out_buffer + sizeof(pkt->version) + sizeof(pkt->string_length)) , *(pkt->message), sizeof(pkt->string_length)+1 ); // THIS IS IMPORTANT!!
   }
   
 }
@@ -389,8 +387,8 @@ void serialize(Packet *pkt, unsigned char *out_buffer){
 void de_serialize(unsigned char *in_buffer, Packet *pkt){
 
   // other way around:
-  memcpy( &pkt->version, &in_buffer[2], (sizeof(char)*2) );
-  memcpy( &pkt->string_length, &in_buffer[4], (sizeof(char)*2) );
-  memcpy( &pkt->message, &in_buffer[8], (sizeof(char)*8) );  
+  memcpy( &(pkt->version), in_buffer[0], sizeof(short) );
+  memcpy( &(pkt->string_length), in_buffer[sizeof(short)], sizeof(short) );
+  memcpy( pkt->message, in_buffer[2*sizeof(short)], sizeof(pkt->string_length) );  
   
 }
