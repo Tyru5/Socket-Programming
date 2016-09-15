@@ -206,9 +206,9 @@ void server(){
     printf("You: ");
 
     do{
-    char *strang = fgets(message_buffer, (MESSAGE_SIZE + 5), stdin);
-    // initialize packet:
-    create_packet(&send_packet, strang);
+      char *strang = fgets(message_buffer, (MESSAGE_SIZE + 5), stdin);
+      // initialize packet:
+      create_packet(&send_packet, strang);
     }while( verify_input( send_packet.string_length ) );
     
     // serializing packet:
