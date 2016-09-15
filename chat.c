@@ -45,15 +45,17 @@ void de_serialize(char *in_buffer, Packet *pkt);
 void sig_handler(int signal);
 void create_packet(Packet *pkt, char *input_buf);
 int verify_input(const int input_length);
+void free_packet(Packet *pkt);
 
 // globals:
 // sockets:
 int socketfd, client_socket, client_file_descriptor;
+char *ip;
 
 int main(int argc, char *argv[]){
 
 
-  char *ip = malloc( sizeof(char) * INET_ADDRSTRLEN);
+  ip = malloc( sizeof(char) * INET_ADDRSTRLEN);
   int port = 0;
 
   process_cargs(argc, argv, ip, &port );
@@ -79,7 +81,6 @@ int main(int argc, char *argv[]){
       exit(1);
     }
     client(port, ip);
-    free(ip);
     break;
   default:
     help_message();
@@ -219,6 +220,9 @@ void server(){
       exit(1);
     }
 
+    free_packet(&send_packet);
+    free_packet(&recv_packet);
+    
   } // done with while.
 
 }
@@ -298,6 +302,9 @@ void client(const int port, const char* ip){
     
     printf("Friend: %s", recv_packet.message);
 
+    free_packet(&send_packet);
+    free_packet(&recv_packet);
+    
   } // end of while.
 
 }
@@ -357,6 +364,11 @@ void create_packet(Packet *pkt, char *input_buf){
   
 }
 
+void free_packet(Packet *pkt){
+  // free contents of packet:
+  free(pkt->message);
+}
+
 void serialize(Packet pkt, char *out_buffer){
   
   memcpy(  out_buffer, &(pkt.version) , sizeof(pkt.version) );
@@ -399,6 +411,7 @@ void sig_handler(int signal){ // this isn't working...
   close( socketfd );
   close( client_file_descriptor );
   close( client_socket );
+  free(ip);
   exit(0);
   
 }
