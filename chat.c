@@ -40,7 +40,6 @@ int good_port(const int  port); // going to use the struct sockaddr_in --> inet_
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
 void process_cargs(const int argc, char *argv[], char *ip, int *port);
-// function to handle signals:
 void sig_handler(const int signal);
 void free_packet(Packet *pkt);
 void serialize(Packet pkt, char *out_buffer);
