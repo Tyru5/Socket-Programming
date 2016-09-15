@@ -368,7 +368,7 @@ void sig_handler(const int signal){
 
   int i;
   for(i = 0; i < 3; i++){
-    printf("Closing socket... %d\n", i);
+    printf("\nClosing socket... %d\n", (i+1) );
     close( sockets[i] );
   }
   
