@@ -6,23 +6,23 @@
 
 // directives:
 #include <stdio.h>
-#include <stdlib.h> // exit();
+#include <stdlib.h> //  exit();
 #include <string.h>
-#include <strings.h> // bzero() && bcopy()
+#include <strings.h> // bzero(); && bcopy();
 #include <stdbool.h>
-// ** needed directives for socket programming** //
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h> // struct sockaddr_in is defined in.
 #include <arpa/inet.h> // inet_pton();
 #include <unistd.h> // for closing file descriptor
 #include <netdb.h>
-#include <signal.h> // for the signal() function.
+#include <signal.h> // for the signal(); function.
 
 #define DEBUG false
 #define MESSAGE_SIZE 140
 #define PORT 51717
 
+// Packet Structure:
 typedef struct packet_info{
   // version:
   short version;
@@ -40,10 +40,13 @@ int good_port(const int  port); // going to use the struct sockaddr_in --> inet_
 int good_ip_addr(const char* ip);
 int hostname_to_ip(char * hostname, char *ip);
 void process_cargs(const int argc, char *argv[], char *ip, int *port);
-void sig_handler(const int signal);
 void free_packet(Packet *pkt);
 void serialize(Packet pkt, char *out_buffer);
 void de_serialize(char *in_buffer, Packet *pkt);
+void sig_handler(const int signal);
+
+// globals:
+int sockets[3];
 
 int main(int argc, char *argv[]){
 
@@ -53,6 +56,9 @@ int main(int argc, char *argv[]){
 
   process_cargs(argc, argv, ip, &port );
 
+  // calling / defining the signal function:
+  signal(SIGINT, sig_handler);
+  
   switch(argc){
   case 1:
     server();
@@ -121,6 +127,9 @@ void server(){
     exit(1);
   }
 
+  // adding socketfd to global ints array:
+  sockets[0] = socketfd;
+
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
 
@@ -167,6 +176,8 @@ void server(){
     exit(1);
   }
 
+  sockets[1] = client_file_descriptor;
+  
 
   while(1){
 
@@ -207,14 +218,11 @@ void server(){
 
   } // done with while.
 
-  close(client_file_descriptor);
-  close(socketfd);
-
 }
 
 void client(const int port, const char* ip){
 
-  int clientSocket, port_number, sent, rec;
+  int client_socket, port_number, sent, rec;
   struct sockaddr_in server_addr;
 
   // obtain the port number:
@@ -223,10 +231,12 @@ void client(const int port, const char* ip){
   if(DEBUG) printf("The client side, the port is: %s\n", ip);
 
   // create the socket:
-  if( (clientSocket = socket(AF_INET, SOCK_STREAM, 0) ) == -1){
+  if( (client_socket = socket(AF_INET, SOCK_STREAM, 0) ) == -1){
     printf("Error creating socket...\n");
     exit(1);
   }
+
+  sockets[2] = client_socket;
 
   bzero( (char *) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
@@ -234,7 +244,7 @@ void client(const int port, const char* ip){
   server_addr.sin_port = htons(port); // <-- convert to BigEndian.
 
   // connecting to the server now...
-  if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1 ){
+  if( connect(client_socket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1 ){
     printf("Error connecting to the server\n");
     exit(1);
   }
@@ -265,12 +275,12 @@ void client(const int port, const char* ip){
     // serialize packet before sending over:
     serialize(send_packet, send_buffer);
 
-    if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
+    if( ( sent = send(client_socket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
       printf("Error sending message to the server...\n");
       exit(1);
     }
     
-    if( ( rec = recv(clientSocket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
+    if( ( rec = recv(client_socket, recv_buffer , sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data from the server...\n");
       exit(1);
     }
@@ -280,8 +290,6 @@ void client(const int port, const char* ip){
     printf("Friend: %s", recv_packet.message);
 
   } // end of while.
-
-  close(clientSocket);
 
 }
 
@@ -308,7 +316,7 @@ int hostname_to_ip(char * hostname , char* ip){
 
 void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
-  int i = 0;
+  int i;
   for(i = 0; i < argc; i++){
     if( strcmp(argv[i], "-p") == 0) *port = atoi(argv[i+1]);
     if( strcmp(argv[i], "-s") == 0) strcpy(ip, argv[i+1] );
@@ -353,5 +361,15 @@ void de_serialize(char *in_buffer, Packet *pkt){
   memcpy( &(pkt->string_length), (sizeof(short) + in_buffer) , sizeof(short) );
   pkt->message = malloc( pkt->string_length );
   memcpy( pkt->message, ( (sizeof(short) * 2) +  in_buffer), pkt->string_length );
+  
+}
+
+void sig_handler(const int signal){
+
+  int i;
+  for(i = 0; i < 3; i++){
+    printf("Closing socket... %d\n", i);
+    close( sockets[i] );
+  }
   
 }
