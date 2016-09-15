@@ -1,4 +1,4 @@
- // Project 1
+// Project 1
 // Author: Tyrus Malmstrom
 // Class: cs457
 // Date: 8/31/2016
@@ -107,32 +107,22 @@ int good_ip_addr(const char* ip){
 }
 
 void server(){
-  /* All the code to run the server */
-
   printf("Welcome to Chat!\n");
 
-  // these struct's is what's going to hold all the data:
   struct sockaddr_in server_addr, client_addr;
   struct addrinfo hints, *info;
 
-  int socketfd,client_file_descriptor, rec, sent, gai_result;
+  int socketfd,client_file_descriptor, rec, sent, getaddrinfo_res;
   socklen_t client_size;
 
-  // function that handles interrupts:
-  // signal( SIGINT, sig_handler(client_file_descriptor, socketfd) )
-
   // allocate a socket descriptor:
-  socketfd = socket(AF_INET, SOCK_STREAM, 0);
-  if(DEBUG) printf("A socket file descriptor is nothing but an int. %d\n", socketfd);
-  // checking that I obtain the socket file descriptor:
-  if(socketfd == -1 ){
+  if( (socketfd = socket(AF_INET, SOCK_STREAM, 0) ) == -1 ){
     printf("Couldn't create the socket\n");
     exit(1);
   }
 
-  // this is writing zero-valued bytes for the whole server_addr struct -- to clear it out.
   bzero( (char*) &server_addr, sizeof(server_addr) );
-  server_addr.sin_family = AF_INET; // IPv4
+  server_addr.sin_family = AF_INET;
 
   char hostname[1024];
   hostname[1023] = '\0';
@@ -143,8 +133,8 @@ void server(){
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_CANONNAME;
 
-  if ( (gai_result = getaddrinfo(hostname, "51717", &hints, &info)) != 0 ) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_result));
+  if ( (getaddrinfo_res = getaddrinfo(hostname, "51717", &hints, &info)) != 0 ) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(getaddrinfo_res));
     exit(1);
   }
 
@@ -170,10 +160,8 @@ void server(){
 
   printf("Waiting for a connection on %s port %d\n", ip, PORT);
 
-
   // Make server listen indefinitely:
   client_size = sizeof(client_addr);
-
   if( (client_file_descriptor = accept(socketfd, (struct sockaddr *) &client_addr, &client_size)) == -1 ){
     printf("Couldn't create the client socket. There was an error on accept.\n");
     exit(1);
@@ -184,6 +172,8 @@ void server(){
 
     Packet recv_packet;
     Packet send_packet;
+
+    char message_buffer[MESSAGE_SIZE];
     char recv_buffer[145];
     char send_buffer[145];
 
@@ -199,8 +189,6 @@ void server(){
     printf("Friend: %s", recv_packet.message);
     // writing back...
     printf("You: ");
-
-    char message_buffer[MESSAGE_SIZE];
     
     send_packet.version = 457;    
     char *strang = fgets(message_buffer, MESSAGE_SIZE, stdin);
@@ -208,8 +196,8 @@ void server(){
     send_packet.string_length = (int) strlen(strang);
     send_packet.message = malloc( send_packet.string_length  );
     strcpy(send_packet.message, message_buffer);
-    // create buffer to send over:    
 
+    // serializing packet:
     serialize(send_packet, send_buffer);
     
     if( (sent = send(client_file_descriptor, send_buffer, sizeof(send_buffer), 0) ) == -1){
@@ -225,7 +213,6 @@ void server(){
 }
 
 void client(const int port, const char* ip){
-  /* All code for the client */
 
   int clientSocket, port_number, sent, rec;
   struct sockaddr_in server_addr;
@@ -236,18 +223,17 @@ void client(const int port, const char* ip){
   if(DEBUG) printf("The client side, the port is: %s\n", ip);
 
   // create the socket:
-  clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-  if(clientSocket == -1){
-    printf("Error creating socket..\n");
+  if( (clientSocket = socket(AF_INET, SOCK_STREAM, 0) ) == -1){
+    printf("Error creating socket...\n");
     exit(1);
   }
 
   bzero( (char *) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = inet_addr(ip);
-  server_addr.sin_port = htons(port);
+  server_addr.sin_port = htons(port); // <-- convert to BigEndian.
 
-  // connecting to the server now..
+  // connecting to the server now...
   if( connect(clientSocket, (struct sockaddr *)&server_addr, sizeof(server_addr) ) == -1 ){
     printf("Error connecting to the server\n");
     exit(1);
@@ -262,23 +248,21 @@ void client(const int port, const char* ip){
     // client enters in their message:
     printf("You: ");
 
-    // create Packet then initialize it:
-    Packet send_packet;
-    Packet recv_packet;
-    
-    send_packet.version = 457;
+    // create Packet:
+    Packet send_packet, recv_packet;
     
     char message_buffer[MESSAGE_SIZE];
-    char *strang = fgets(message_buffer, MESSAGE_SIZE, stdin);
+    char send_buffer[145];
+    char recv_buffer[145];
+
     
+    send_packet.version = 457;
+    char *strang = fgets(message_buffer, MESSAGE_SIZE, stdin);
     send_packet.string_length = (int) strlen(strang);
     send_packet.message = malloc( send_packet.string_length );
     strcpy(send_packet.message, message_buffer);
 
-    // create buffer to send over:
-    char send_buffer[145];
-    char recv_buffer[145];
-    
+    // serialize packet before sending over:
     serialize(send_packet, send_buffer);
 
     if( ( sent = send(clientSocket, send_buffer, sizeof(send_buffer), 0) ) == -1 ){
@@ -295,8 +279,6 @@ void client(const int port, const char* ip){
     
     printf("Friend: %s", recv_packet.message);
 
-    // free_packet( recv_packet );
-    
   } // end of while.
 
   close(clientSocket);
@@ -304,13 +286,14 @@ void client(const int port, const char* ip){
 }
 
 int hostname_to_ip(char * hostname , char* ip){
+  // using the hostent structure to find out what the hostname of the machine is:
   struct hostent *he;
   struct in_addr **addr_list;
   int i;
 
   if ( (he = gethostbyname( hostname ) ) == NULL){
     // get the host info
-    herror("gethostbyname");
+    printf("Couldn't retrive the hostname from the machine...\n");
     return 1;
   }
   addr_list = (struct in_addr **) he->h_addr_list;
@@ -326,7 +309,6 @@ int hostname_to_ip(char * hostname , char* ip){
 void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
   int i = 0;
-
   for(i = 0; i < argc; i++){
     if( strcmp(argv[i], "-p") == 0) *port = atoi(argv[i+1]);
     if( strcmp(argv[i], "-s") == 0) strcpy(ip, argv[i+1] );
