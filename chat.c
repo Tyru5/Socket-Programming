@@ -36,14 +36,16 @@ typedef struct packet_info{
 void help_message();
 void server();
 void client(const int port, const char* IP);
-int good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
-int good_ip_addr(const char* ip);
-int hostname_to_ip(char * hostname, char *ip);
+int  good_port(const int  port); // going to use the struct sockaddr_in --> inet_pton();
+int  good_ip_addr(const char* ip);
+int  hostname_to_ip(char * hostname, char *ip);
 void process_cargs(const int argc, char *argv[], char *ip, int *port);
 void free_packet(Packet *pkt);
 void serialize(Packet pkt, char *out_buffer);
 void de_serialize(char *in_buffer, Packet *pkt);
 void sig_handler(const int signal);
+void create_packet(Packet *pkt, char *input_buf);
+int verify_input(const int input_length);
 
 // globals:
 int sockets[3];
@@ -184,10 +186,12 @@ void server(){
     Packet recv_packet;
     Packet send_packet;
 
-    char message_buffer[MESSAGE_SIZE];
-    char recv_buffer[145];
-    char send_buffer[145];
-
+    char message_buffer[MESSAGE_SIZE+5];
+    message_buffer[140] = '\0';
+    char recv_buffer[141];
+    recv_buffer[140] = '\0';
+    char send_buffer[141];
+    send_buffer[140] = '\0';
     
     if( ( rec = recv(client_file_descriptor, recv_buffer, sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data...\n");
@@ -200,14 +204,13 @@ void server(){
     printf("Friend: %s", recv_packet.message);
     // writing back...
     printf("You: ");
-    
-    send_packet.version = 457;    
-    char *strang = fgets(message_buffer, MESSAGE_SIZE, stdin);
-    
-    send_packet.string_length = (int) strlen(strang);
-    send_packet.message = malloc( send_packet.string_length  );
-    strcpy(send_packet.message, message_buffer);
 
+    do{
+    char *strang = fgets(message_buffer, (MESSAGE_SIZE + 5), stdin);
+    // initialize packet:
+    create_packet(&send_packet, strang);
+    }while( verify_input( send_packet.string_length ) );
+    
     // serializing packet:
     serialize(send_packet, send_buffer);
     
@@ -261,17 +264,19 @@ void client(const int port, const char* ip){
     // create Packet:
     Packet send_packet, recv_packet;
     
-    char message_buffer[MESSAGE_SIZE];
-    char send_buffer[145];
-    char recv_buffer[145];
-
+    char message_buffer[MESSAGE_SIZE+5];
+    message_buffer[140] = '\0';
+    char send_buffer[141];
+    send_buffer[140] = '\0';
+    char recv_buffer[141];
+    recv_buffer[140] = '\0';    
     
-    send_packet.version = 457;
-    char *strang = fgets(message_buffer, MESSAGE_SIZE, stdin);
-    send_packet.string_length = (int) strlen(strang);
-    send_packet.message = malloc( send_packet.string_length );
-    strcpy(send_packet.message, message_buffer);
-
+    do{
+      char *strang = fgets(message_buffer, (MESSAGE_SIZE+5) , stdin);
+      // initialize packet:
+      create_packet(&send_packet, strang);
+    }while( verify_input( send_packet.string_length ) );
+    
     // serialize packet before sending over:
     serialize(send_packet, send_buffer);
 
@@ -327,6 +332,27 @@ void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
 }
 
+int verify_input(const int input_length){
+  printf("input_length = %d\n", input_length);
+  if( input_length > MESSAGE_SIZE ){
+    printf("Error: Input too long.\n");
+    return 1;
+  }
+  return 0;
+}
+
+void create_packet(Packet *pkt, char *input_buf){
+
+  // setting version:
+  pkt->version = 457;
+  // setting string_length:
+  pkt->string_length = (int) strlen(input_buf);
+  pkt->message = malloc( pkt->string_length );
+  // copying string into message field:
+  strcpy(pkt->message, input_buf);  
+  
+}
+
 void serialize(Packet pkt, char *out_buffer){
   
   memcpy(  out_buffer, &(pkt.version) , sizeof(pkt.version) );
@@ -352,7 +378,6 @@ void serialize(Packet pkt, char *out_buffer){
   }
   
 }
-
 
 void de_serialize(char *in_buffer, Packet *pkt){
   
