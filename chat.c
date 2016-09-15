@@ -43,12 +43,13 @@ void process_cargs(const int argc, char *argv[], char *ip, int *port);
 void free_packet(Packet *pkt);
 void serialize(Packet pkt, char *out_buffer);
 void de_serialize(char *in_buffer, Packet *pkt);
-void sig_handler(const int signal);
+void sig_handler(int signal);
 void create_packet(Packet *pkt, char *input_buf);
 int verify_input(const int input_length);
 
 // globals:
-int sockets[3];
+// sockets:
+int socketfd, client_socket, client_file_descriptor;
 
 int main(int argc, char *argv[]){
 
@@ -120,7 +121,7 @@ void server(){
   struct sockaddr_in server_addr, client_addr;
   struct addrinfo hints, *info;
 
-  int socketfd,client_file_descriptor, rec, sent, getaddrinfo_res;
+  int rec, sent, getaddrinfo_res;
   socklen_t client_size;
 
   // allocate a socket descriptor:
@@ -129,9 +130,8 @@ void server(){
     exit(1);
   }
 
-  // adding socketfd to global ints array:
-  sockets[0] = socketfd;
-
+  // printf("first socket = %d\n", socketfd);
+  
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
 
@@ -178,8 +178,6 @@ void server(){
     exit(1);
   }
 
-  sockets[1] = client_file_descriptor;
-  
 
   while(1){
 
@@ -225,7 +223,7 @@ void server(){
 
 void client(const int port, const char* ip){
 
-  int client_socket, port_number, sent, rec;
+  int port_number, sent, rec;
   struct sockaddr_in server_addr;
 
   // obtain the port number:
@@ -239,8 +237,8 @@ void client(const int port, const char* ip){
     exit(1);
   }
 
-  sockets[2] = client_socket;
-
+  // printf("second socket = %d\n", client_socket);
+  
   bzero( (char *) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = inet_addr(ip);
@@ -265,7 +263,7 @@ void client(const int port, const char* ip){
     Packet send_packet, recv_packet;
     
     char message_buffer[MESSAGE_SIZE+5];
-    message_buffer[140] = '\0';
+    message_buffer[144] = '\0';
     char send_buffer[141];
     send_buffer[140] = '\0';
     char recv_buffer[141];
@@ -333,8 +331,8 @@ void process_cargs(const int argc, char *argv[], char *ip, int *port){
 }
 
 int verify_input(const int input_length){
-  printf("input_length = %d\n", input_length);
-  if( input_length > MESSAGE_SIZE ){
+  // printf("input_length = %d\n", input_length);
+  if( input_length > 140 ){
     printf("Error: Input too long.\n");
     return 1;
   }
@@ -349,7 +347,7 @@ void create_packet(Packet *pkt, char *input_buf){
   pkt->string_length = (int) strlen(input_buf);
   pkt->message = malloc( pkt->string_length );
   // copying string into message field:
-  strcpy(pkt->message, input_buf);  
+  strcpy(pkt->message, input_buf);
   
 }
 
@@ -389,12 +387,12 @@ void de_serialize(char *in_buffer, Packet *pkt){
   
 }
 
-void sig_handler(const int signal){
+void sig_handler(int signal){ // this isn't working...
 
-  int i;
-  for(i = 0; i < 3; i++){
-    printf("\nClosing socket... %d\n", (i+1) );
-    close( sockets[i] );
-  }
+  printf("\nClosing all Sockets...\n");  
+  close( socketfd );
+  close( client_file_descriptor );
+  close( client_socket );
+  exit(0);
   
 }
