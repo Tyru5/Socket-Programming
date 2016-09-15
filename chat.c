@@ -44,7 +44,7 @@ void serialize(Packet pkt, char *out_buffer);
 void de_serialize(char *in_buffer, Packet *pkt);
 void sig_handler(int signal);
 void create_packet(Packet *pkt, char *input_buf);
-int verify_input(const int input_length);
+int verify_input(const short input_length);
 void free_packet(Packet *pkt);
 
 // globals:
@@ -210,6 +210,7 @@ void server(){
       char *strang = fgets(message_buffer, 145, stdin);
       // initialize packet:
       create_packet(&send_packet, strang);
+      bzero(strang, sizeof(*strang) );
     }while( verify_input( send_packet.string_length ) );
     
     // serializing packet:
@@ -268,8 +269,8 @@ void client(const int port, const char* ip){
     // create Packet:
     Packet send_packet, recv_packet;
     
-    char message_buffer[145];
-    message_buffer[144] = '\0';
+    char message_buffer[141];
+    message_buffer[140] = '\0';
     char send_buffer[141];
     send_buffer[140] = '\0';
     char recv_buffer[141];
@@ -278,11 +279,11 @@ void client(const int port, const char* ip){
     bzero(recv_buffer, sizeof(recv_buffer) );
     bzero(send_buffer, sizeof(send_buffer) );
     
-    
     do{
       char *strang = fgets(message_buffer, 145 , stdin);
       // initialize packet:
       create_packet(&send_packet, strang);
+      bzero(strang, sizeof(*strang) );
     }while( verify_input( send_packet.string_length ) );
     
     // serialize packet before sending over:
@@ -343,7 +344,7 @@ void process_cargs(const int argc, char *argv[], char *ip, int *port){
 
 }
 
-int verify_input(const int input_length){
+int verify_input(const short input_length){
   // printf("input_length = %d\n", input_length);
   if( input_length > 140 ){
     printf("Error: Input too long.\n");
