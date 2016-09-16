@@ -38,7 +38,7 @@ clean:
 # Package the directory
 package:
 	@echo "Packaging up project directory ..."
-	tar -cvf $(EXE).tar *.c Makefile README.txt
+	tar -cvf P1MalmstromTyrus.tar *.c Makefile README.txt
 	@echo ""
 
 
