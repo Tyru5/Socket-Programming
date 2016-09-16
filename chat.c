@@ -187,11 +187,8 @@ void server(){
     Packet send_packet;
 
     char message_buffer[15000];
-    // message_buffer[144] = '\0';
     char recv_buffer[145];
-    // recv_buffer[140] = '\0';
     char send_buffer[145];
-    // send_buffer[140] = '\0';
     bzero(&message_buffer, sizeof(message_buffer) );
     bzero(&recv_buffer, sizeof(recv_buffer) );
     bzero(&send_buffer, sizeof(send_buffer) );
@@ -276,11 +273,8 @@ void client(const int port, const char* ip){
     Packet send_packet, recv_packet;
     
     char message_buffer[15000];
-    // message_buffer[140] = '\0';
     char send_buffer[145];
-    //send_buffer[140] = '\0';
     char recv_buffer[145];
-    //recv_buffer[140] = '\0';
     bzero(&message_buffer, sizeof(message_buffer) );
     bzero(&recv_buffer, sizeof(recv_buffer) );
     bzero(&send_buffer, sizeof(send_buffer) );
