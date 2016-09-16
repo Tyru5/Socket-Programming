@@ -49,7 +49,7 @@ void free_packet(Packet *pkt);
 
 // globals:
 // sockets:
-int socketfd, client_socket, client_file_descriptor;
+int socketfd, client_socket, client_file_descriptor, one;
 char *ip;
 
 int main(int argc, char *argv[]){
@@ -130,6 +130,11 @@ void server(){
     exit(1);
   }
 
+  if( setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int) ) == -1 ){
+    perror("setsockopt");
+    exit(1);
+  }
+  
   bzero( (char*) &server_addr, sizeof(server_addr) );
   server_addr.sin_family = AF_INET;
 
@@ -146,8 +151,6 @@ void server(){
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(getaddrinfo_res));
     exit(1);
   }
-
-  freeaddrinfo(info);
 
   char ip[100];
   hostname_to_ip(hostname , ip);
@@ -167,6 +170,7 @@ void server(){
     exit(1);
   }
 
+  freeaddrinfo(info);
   printf("Waiting for a connection on %s port %d\n", ip, PORT);
 
   // Make server listen indefinitely:
@@ -182,30 +186,30 @@ void server(){
     Packet recv_packet;
     Packet send_packet;
 
-    char message_buffer[145];
-    message_buffer[144] = '\0';
-    char recv_buffer[141];
-    recv_buffer[140] = '\0';
-    char send_buffer[141];
-    send_buffer[140] = '\0';
+    char message_buffer[15000];
+    // message_buffer[144] = '\0';
+    char recv_buffer[145];
+    // recv_buffer[140] = '\0';
+    char send_buffer[145];
+    // send_buffer[140] = '\0';
     bzero(&message_buffer, sizeof(message_buffer) );
     bzero(&recv_buffer, sizeof(recv_buffer) );
     bzero(&send_buffer, sizeof(send_buffer) );
-    
+
     if( ( rec = recv(client_file_descriptor, recv_buffer, sizeof(recv_buffer), 0) ) == -1 ){
       printf("Error recieving the data...\n");
       exit(1);
     }
 
-    de_serialize(recv_buffer, &recv_packet);
-
-    // printing out the data sent from the client:
+    de_serialize(recv_buffer, &recv_packet);    
     printf("Friend: %s", recv_packet.message);
-    // writing back...
+    free_packet(&recv_packet);
+
+    printf("\n");
     printf("You: ");
 
     do{
-      char *strang = fgets(message_buffer, 145, stdin);
+      char *strang = fgets(message_buffer, 15000, stdin);
       // initialize packet:
       create_packet(&send_packet, strang);
       bzero(strang, sizeof(*strang) );
@@ -220,7 +224,6 @@ void server(){
     }
 
     free_packet(&send_packet);
-    free_packet(&recv_packet);
     
   } // done with while.
 
@@ -242,6 +245,11 @@ void client(const int port, const char* ip){
     exit(1);
   }
 
+  if( setsockopt(client_socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int) ) == -1 ){
+    perror("setsockopt");
+    exit(1);
+  }
+  
   // printf("second socket = %d\n", client_socket);
   
   bzero( (char *) &server_addr, sizeof(server_addr) );
@@ -267,18 +275,18 @@ void client(const int port, const char* ip){
     // create Packet:
     Packet send_packet, recv_packet;
     
-    char message_buffer[141];
-    message_buffer[140] = '\0';
-    char send_buffer[141];
-    send_buffer[140] = '\0';
-    char recv_buffer[141];
-    recv_buffer[140] = '\0';
+    char message_buffer[15000];
+    // message_buffer[140] = '\0';
+    char send_buffer[145];
+    //send_buffer[140] = '\0';
+    char recv_buffer[145];
+    //recv_buffer[140] = '\0';
     bzero(&message_buffer, sizeof(message_buffer) );
     bzero(&recv_buffer, sizeof(recv_buffer) );
     bzero(&send_buffer, sizeof(send_buffer) );
     
     do{
-      char *strang = fgets(message_buffer, 145 , stdin);
+      char *strang = fgets(message_buffer, 15000 , stdin);
       // initialize packet:
       create_packet(&send_packet, strang);
       bzero(strang, sizeof(*strang) );
@@ -300,6 +308,7 @@ void client(const int port, const char* ip){
     de_serialize(recv_buffer, &recv_packet);
     
     printf("Friend: %s", recv_packet.message);
+    printf("\n");
 
     free_packet(&send_packet);
     free_packet(&recv_packet);
@@ -343,9 +352,10 @@ void process_cargs(const int argc, char *argv[], char *ip, int *port){
 }
 
 int verify_input(const short input_length){
-  printf("input_length = %d\n", input_length);
+  // printf("input_length = %d\n", input_length);
   if( input_length > 140 ){
     printf("Error: Input too long.\n");
+    printf("You: ");
     return 1;
   }
   return 0;
@@ -357,9 +367,11 @@ void create_packet(Packet *pkt, char *input_buf){
   pkt->version = 457;
   // setting string_length:
   pkt->string_length = (int) strlen(input_buf);
+  // printf("the string length in create_packet: %d\n", pkt->string_length);
   pkt->message = malloc( pkt->string_length );
   // copying string into message field:
   strcpy(pkt->message, input_buf);
+  // printf("printing out the message too: %s\n", pkt->message);
   
 }
 
