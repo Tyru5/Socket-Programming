@@ -53,7 +53,10 @@ Client:
   1) To compile my program, all the user has to do is run 'make all' which will compile the chat.c file. On the contrary, for the user to clean up the project / directory, one would have to
      run 'make clean' which will automatically clean the project and directory. Lastly, if the user wanted to clean the old project and then compile in one command, the user would type in
      'make clean all'.
-
+  2) There are 3 ways of invoking my program. They are as follows:
+     	   - by invoking the program with the '-h' parameter will bring up a help / usage dialog on how to run / invoke my program. --> ./chat -h
+	   - by invoking the program with NO parameters, my program will run as the SERVER. --> ./chat
+	   - by invoking the program with arguments, my program acts as the CLIENT. '-p' refers the the specific port and '-s' refers to the specific IP address that the server is running on. --> ./chat -p <port number> -s <IP address>
 
 ::Questions I had for the TA::
  - I had a lot of questions for the TA regarding this project. The are as follows:
