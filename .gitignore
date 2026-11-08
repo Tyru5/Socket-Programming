@@ -1,0 +1,4 @@
+chat
+chat-asan
+*.o
+*.dSYM/

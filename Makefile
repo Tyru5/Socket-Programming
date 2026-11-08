@@ -1,44 +1,24 @@
-# Tyrus Malmstrom
-# Makefile for cs457 Project 1
+# Makefile for chat (originally CS457 Project 1, 2016)
 
-# List of files
-C_SRCS		= chat.c
-C_OBJS		= chat.o
+CFLAGS   ?= -std=c17 -O2 -g -Wall -Wextra -Wpedantic -Wshadow -Wstrict-prototypes
+SANITIZE  = -fsanitize=address,undefined -fno-omit-frame-pointer
 
-OBJS		= ${C_OBJS} 
-EXE	        = chat
+all: chat
 
-# Compiler and loader commands and flags
-CC		= gcc
-CC_FLAGS	= -g -O0 -Wall -c
-LD_FLAGS	= -g -Wall
+chat: chat.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $< -o $@
 
+# Same program built with AddressSanitizer and UndefinedBehaviorSanitizer.
+chat-asan: chat.c
+	$(CC) $(CFLAGS) -O1 $(SANITIZE) $< -o $@
 
-all  : chat
-	@echo "-- Success!"
+test: chat
+	./test.sh ./chat
 
-# Target is the executable
-chat : $(OBJS)
-	@echo "Linking all object modules ..."
-	$(CC) $(LD_FLAGS) $(OBJS) -o $(EXE)
-	@echo ""
+test-asan: chat-asan
+	./test.sh ./chat-asan
 
-# Compile .c files to .o files
-.c.o:
-	@echo "Compiling each C source file separately ..."
-	$(CC) $(CC_FLAGS) $<
-	@echo ""
-
-# Clean up the directory
 clean:
-	@echo "Cleaning up project directory ..."
-	rm -f *.o *~ $(EXE).tar $(EXE) core
-	@echo ""
+	rm -rf chat chat-asan *.o *.dSYM
 
-# Package the directory
-package:
-	@echo "Packaging up project directory ..."
-	tar -cvf P1MalmstromTyrus.tar *.c Makefile README.txt
-	@echo ""
-
-
+.PHONY: all test test-asan clean

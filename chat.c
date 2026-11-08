@@ -1,431 +1,411 @@
-// Project 1
+// chat: a small two-person TCP chat.
 // Author: Tyrus Malmstrom
-// Class: cs457
-// Date: 8/31/2016
-// 'Simple' chat program
+// Originally CS457 Project 1 (Fall 2016); modernized in 2026.
+//
+// Run with no -s option to wait for a friend (server), or with -s to connect
+// to one (client). Once connected, either side can send at any time.
+//
+// Wire format, one frame per message, all integers in network byte order:
+//   uint16 version (457) | uint16 length (0-140) | length bytes of text
 
-// directives:
-#include <arpa/inet.h> // inet_pton();
+#define _DEFAULT_SOURCE // getifaddrs() and NI_MAXHOST on glibc
+
+#include <arpa/inet.h>
+#include <errno.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <netdb.h>
-#include <netinet/in.h> // struct sockaddr_in is defined in.
-#include <signal.h>     // for the signal(); function.
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h> //  exit();
+#include <stdlib.h>
 #include <string.h>
-#include <strings.h> // bzero(); && bcopy();
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h> // for closing file descriptor
+#include <unistd.h>
 
-#define DEBUG false
-#define PORT 51717
+#define DEFAULT_PORT "51717"
+#define PROTOCOL_VERSION 457
+#define MAX_MESSAGE 140
+#define HEADER_SIZE 4
 
-// Packet Structure:
-typedef struct packet_info {
-  // version:
-  short version;
-  // String length, 16 bits:
-  short string_length;
-  // actual message:
-  char *message;
-} Packet;
+static volatile sig_atomic_t interrupted;
 
-// function prototypes:
-void help_message();
-void server();
-void client(const int port, const char *IP);
-int good_port(
-    const int port); // going to use the struct sockaddr_in --> inet_pton();
-int good_ip_addr(const char *ip);
-int hostname_to_ip(char *hostname, char *ip);
-void process_cargs(const int argc, char *argv[], char *ip, int *port);
-void free_packet(Packet *pkt);
-void serialize(Packet pkt, char *out_buffer);
-void de_serialize(char *in_buffer, Packet *pkt);
-void sig_handler(int signal);
-void create_packet(Packet *pkt, char *input_buf);
-int verify_input(const short input_length);
-void free_packet(Packet *pkt);
+static void on_signal(int signo) {
+  (void)signo;
+  interrupted = 1;
+}
 
-// globals:
-// sockets:
-int socketfd, client_socket, client_file_descriptor, one;
-char *ip;
+static void usage(FILE *out) {
+  fprintf(out,
+          "Usage: chat [-p port]           wait for a friend (server)\n"
+          "       chat -s host [-p port]   connect to a friend (client)\n"
+          "\n"
+          "Options:\n"
+          "  -p port  TCP port (default " DEFAULT_PORT ")\n"
+          "  -s host  hostname or IPv4/IPv6 address of the other node\n"
+          "  -h       show this help\n");
+}
+
+static bool valid_port(const char *s) {
+  char *end;
+  errno = 0;
+  long n = strtol(s, &end, 10);
+  return errno == 0 && end != s && *end == '\0' && n >= 1 && n <= 65535;
+}
+
+// Listens on every local address. A dual-stack IPv6 socket is preferred so
+// that IPv4 and IPv6 friends can both connect; plain IPv4 is the fallback.
+static int listen_on(const char *port) {
+  const int families[] = {AF_INET6, AF_INET};
+  int saved_errno = 0;
+
+  for (size_t f = 0; f < sizeof families / sizeof families[0]; f++) {
+    struct addrinfo hints = {.ai_family = families[f],
+                             .ai_socktype = SOCK_STREAM,
+                             .ai_flags = AI_PASSIVE};
+    struct addrinfo *res;
+    if (getaddrinfo(NULL, port, &hints, &res) != 0)
+      continue;
+
+    for (struct addrinfo *ai = res; ai; ai = ai->ai_next) {
+      int fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+      if (fd == -1) {
+        saved_errno = errno;
+        continue;
+      }
+      int on = 1, off = 0;
+      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+      if (ai->ai_family == AF_INET6)
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
+      if (bind(fd, ai->ai_addr, ai->ai_addrlen) == 0 && listen(fd, 1) == 0) {
+        freeaddrinfo(res);
+        return fd;
+      }
+      saved_errno = errno;
+      close(fd);
+    }
+    freeaddrinfo(res);
+  }
+
+  fprintf(stderr, "chat: cannot listen on port %s: %s\n", port,
+          strerror(saved_errno));
+  return -1;
+}
+
+// Prints this machine's IPv4 addresses so the user can tell their friend
+// where to connect.
+static void print_addresses(const char *port) {
+  struct ifaddrs *ifs;
+  int shown = 0;
+
+  if (getifaddrs(&ifs) == 0) {
+    for (struct ifaddrs *i = ifs; i; i = i->ifa_next) {
+      if (!i->ifa_addr || i->ifa_addr->sa_family != AF_INET ||
+          !(i->ifa_flags & IFF_UP) || (i->ifa_flags & IFF_LOOPBACK))
+        continue;
+      char host[NI_MAXHOST];
+      if (getnameinfo(i->ifa_addr, sizeof(struct sockaddr_in), host,
+                      sizeof host, NULL, 0, NI_NUMERICHOST) == 0) {
+        printf("Waiting for a connection on %s port %s\n", host, port);
+        shown++;
+      }
+    }
+    freeifaddrs(ifs);
+  }
+  if (!shown)
+    printf("Waiting for a connection on 127.0.0.1 port %s\n", port);
+}
+
+static int wait_for_friend(const char *port) {
+  int listener = listen_on(port);
+  if (listener == -1)
+    return -1;
+  print_addresses(port);
+
+  int fd;
+  while ((fd = accept(listener, NULL, NULL)) == -1) {
+    if (errno != EINTR || interrupted) {
+      if (!interrupted)
+        perror("chat: accept");
+      break;
+    }
+  }
+  close(listener); // one conversation per run
+  return fd;
+}
+
+static int connect_to(const char *host, const char *port) {
+  struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM};
+  struct addrinfo *res;
+  int err = getaddrinfo(host, port, &hints, &res);
+  if (err != 0) {
+    fprintf(stderr, "chat: %s: %s\n", host, gai_strerror(err));
+    return -1;
+  }
+
+  int fd = -1, saved_errno = 0;
+  for (struct addrinfo *ai = res; ai && !interrupted; ai = ai->ai_next) {
+    fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+    if (fd == -1) {
+      saved_errno = errno;
+      continue;
+    }
+    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
+      break;
+    saved_errno = errno;
+    close(fd);
+    fd = -1;
+  }
+  freeaddrinfo(res);
+
+  if (fd == -1 && !interrupted)
+    fprintf(stderr, "chat: cannot connect to %s port %s: %s\n", host, port,
+            strerror(saved_errno));
+  return fd;
+}
+
+static void print_peer(int sock) {
+  struct sockaddr_storage addr;
+  socklen_t len = sizeof addr;
+  char host[NI_MAXHOST] = "unknown";
+
+  if (getpeername(sock, (struct sockaddr *)&addr, &len) == 0)
+    getnameinfo((struct sockaddr *)&addr, len, host, sizeof host, NULL, 0,
+                NI_NUMERICHOST);
+  // The dual-stack server sees IPv4 friends as "::ffff:a.b.c.d".
+  const char *shown = strncmp(host, "::ffff:", 7) == 0 ? host + 7 : host;
+  printf("Connected to %s. Type a message and press Enter.\n", shown);
+}
+
+static bool send_all(int fd, const void *buf, size_t len) {
+  const char *p = buf;
+  while (len > 0) {
+    ssize_t n = send(fd, p, len, 0);
+    if (n == -1) {
+      if (errno == EINTR)
+        continue;
+      return false;
+    }
+    p += n;
+    len -= (size_t)n;
+  }
+  return true;
+}
+
+static bool send_message(int sock, const char *text, size_t len) {
+  unsigned char frame[HEADER_SIZE + MAX_MESSAGE];
+  uint16_t version = htons(PROTOCOL_VERSION);
+  uint16_t length = htons((uint16_t)len);
+
+  memcpy(frame, &version, sizeof version);
+  memcpy(frame + sizeof version, &length, sizeof length);
+  memcpy(frame + HEADER_SIZE, text, len);
+  return send_all(sock, frame, HEADER_SIZE + len);
+}
+
+// Sends each complete line in buf as one message and keeps the trailing
+// partial line for the next read. At end of input, a final line without a
+// newline is sent too. Lines longer than MAX_MESSAGE are dropped whole.
+static bool send_lines(int sock, char *buf, size_t *len, bool *too_long,
+                       bool eof) {
+  size_t start = 0;
+  for (;;) {
+    char *nl = memchr(buf + start, '\n', *len - start);
+    if (!nl && !eof)
+      break;
+    size_t end = nl ? (size_t)(nl - buf) : *len;
+    size_t n = end - start;
+
+    if (*too_long || n > MAX_MESSAGE)
+      fprintf(stderr, "Error: message too long (max %d bytes).\n",
+              MAX_MESSAGE);
+    else if (n > 0 && !send_message(sock, buf + start, n))
+      return false;
+    *too_long = false;
+
+    start = nl ? end + 1 : end;
+    if (!nl)
+      break;
+  }
+
+  memmove(buf, buf + start, *len - start);
+  *len -= start;
+  if (*len > MAX_MESSAGE) { // already too long: discard until the newline
+    *too_long = true;
+    *len = 0;
+  }
+  return true;
+}
+
+// Prints a received message, replacing control characters so a friend can't
+// send terminal escape sequences.
+static void print_message(const unsigned char *text, size_t len,
+                          bool prompt) {
+  char clean[MAX_MESSAGE];
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = text[i];
+    clean[i] = (c < 0x20 && c != '\t') || c == 0x7f ? '?' : (char)c;
+  }
+
+  if (prompt)
+    printf("\r\033[2K"); // replace the "You: " prompt line
+  printf("Friend: %.*s\n", (int)len, clean);
+  if (prompt)
+    printf("You: ");
+  fflush(stdout);
+}
+
+// Relays stdin to the friend and the friend's messages to stdout until one
+// side hangs up. Returns the process exit status.
+static int chat(int sock) {
+  bool prompt = isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+  unsigned char in[HEADER_SIZE + MAX_MESSAGE]; // one frame at most
+  size_t in_len = 0;
+  char line[512];
+  size_t line_len = 0;
+  bool too_long = false, stdin_open = true;
+
+  print_peer(sock);
+  if (prompt) {
+    printf("You: ");
+    fflush(stdout);
+  }
+
+  while (!interrupted) {
+    // select() rather than poll(): macOS poll() never reports end of input
+    // on a FIFO, so `chat < fifo` would never notice it.
+    fd_set ready;
+    FD_ZERO(&ready);
+    FD_SET(sock, &ready);
+    if (stdin_open)
+      FD_SET(STDIN_FILENO, &ready);
+    if (select(sock + 1, &ready, NULL, NULL, NULL) == -1) {
+      if (errno == EINTR)
+        continue;
+      perror("chat: select");
+      return 1;
+    }
+
+    if (FD_ISSET(sock, &ready)) {
+      ssize_t n = recv(sock, in + in_len, sizeof in - in_len, 0);
+      if (n == -1) {
+        if (errno == EINTR)
+          continue;
+        perror("chat: recv");
+        return 1;
+      }
+      if (n == 0) {
+        if (prompt)
+          printf("\r\033[2K");
+        printf("Friend disconnected.\n");
+        if (in_len == 0)
+          return 0;
+        fprintf(stderr, "chat: connection closed mid-message\n");
+        return 1;
+      }
+      in_len += (size_t)n;
+
+      // TCP is a byte stream: a read can hold part of a frame or several.
+      while (in_len >= HEADER_SIZE) {
+        uint16_t version, length;
+        memcpy(&version, in, sizeof version);
+        memcpy(&length, in + sizeof version, sizeof length);
+        version = ntohs(version);
+        length = ntohs(length);
+        if (version != PROTOCOL_VERSION || length > MAX_MESSAGE) {
+          fprintf(stderr, "chat: protocol error (version %u, length %u)\n",
+                  version, length);
+          return 1;
+        }
+
+        size_t frame = HEADER_SIZE + length;
+        if (in_len < frame)
+          break;
+        print_message(in + HEADER_SIZE, length, prompt);
+        memmove(in, in + frame, in_len - frame);
+        in_len -= frame;
+      }
+    }
+
+    if (stdin_open && FD_ISSET(STDIN_FILENO, &ready)) {
+      ssize_t n = read(STDIN_FILENO, line + line_len, sizeof line - line_len);
+      if (n == -1) {
+        if (errno == EINTR)
+          continue;
+        perror("chat: read");
+        return 1;
+      }
+      line_len += (size_t)n;
+      bool eof = n == 0;
+      if (!send_lines(sock, line, &line_len, &too_long, eof)) {
+        perror("chat: send");
+        return 1;
+      }
+      if (eof) {
+        // Done sending; keep reading until the friend hangs up too.
+        stdin_open = false;
+        shutdown(sock, SHUT_WR);
+      } else if (prompt) {
+        printf("You: ");
+        fflush(stdout);
+      }
+    }
+  }
+  return 0;
+}
 
 int main(int argc, char *argv[]) {
+  const char *port = DEFAULT_PORT, *host = NULL;
+  int opt;
 
-  ip = malloc(sizeof(char) * INET_ADDRSTRLEN);
-  int port = 0;
-
-  process_cargs(argc, argv, ip, &port);
-
-  // calling / defining the signal function:
-  signal(SIGINT, sig_handler);
-
-  switch (argc) {
-  case 1:
-    server();
-    break;
-  case 2:
-    help_message();
-    break;
-  case 5:
-    // Sanity Checking inputs:
-    if (!good_port(port)) {
-      printf("Please enter a valid port\n");
-      exit(1);
+  while ((opt = getopt(argc, argv, "p:s:h")) != -1) {
+    switch (opt) {
+    case 'p':
+      port = optarg;
+      break;
+    case 's':
+      host = optarg;
+      break;
+    case 'h':
+      usage(stdout);
+      return 0;
+    default:
+      usage(stderr);
+      return 1;
     }
-    if (!good_ip_addr(ip)) {
-      printf("Please enter a valid ip address\n");
-      exit(1);
-    }
-    client(port, ip);
-    break;
-  default:
-    help_message();
-    break;
   }
-
-  return 0;
-}
-
-void help_message() {
-  printf("Usage: chat [options] [ -p port number | -s IP address of other node "
-         "]\n\n");
-  printf("Options:\n");
-  printf("   -p \t specifies the port number to connect to\n");
-  printf("   -s \t specifies the IP address of the other node\n");
-  exit(0);
-}
-
-int good_port(const int port) {
-  // use ports withing the range: 1024 - 65535
-  // All ports below 1024 are RESERVED
-  if (port >= 1024 && port <= 65535) {
+  if (optind < argc) {
+    usage(stderr);
     return 1;
   }
-  return 0;
-}
+  if (!valid_port(port)) {
+    fprintf(stderr, "chat: invalid port '%s' (expected 1-65535)\n", port);
+    return 1;
+  }
 
-int good_ip_addr(const char *ip) {
-  struct sockaddr_in sa;
-  // IP address format conversion --> inet_pton :: convert IP address from dot
-  // notation to 32 bit binary.
-  int res = inet_pton(AF_INET, ip, &(sa.sin_addr));
-  return res != 0;
-}
+  // No SA_RESTART, so Ctrl-C interrupts accept(), connect() and select().
+  struct sigaction sa = {.sa_handler = on_signal};
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGTERM, &sa, NULL);
+  // A vanished friend should surface as a send() error, not kill us.
+  signal(SIGPIPE, SIG_IGN);
 
-void server() {
+  setvbuf(stdout, NULL, _IOLBF, 0);
   printf("Welcome to Chat!\n");
 
-  struct sockaddr_in server_addr, client_addr;
-  struct addrinfo hints, *info;
+  int sock = host ? connect_to(host, port) : wait_for_friend(port);
+  int status = sock == -1 ? 1 : chat(sock);
+  if (sock != -1)
+    close(sock);
 
-  int rec, sent, getaddrinfo_res;
-  socklen_t client_size;
-
-  // allocate a socket descriptor:
-  if ((socketfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    printf("Couldn't create the socket\n");
-    exit(1);
+  if (interrupted) {
+    printf("\nClosing connection.\n");
+    status = 0;
   }
-
-  if (setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int)) == -1) {
-    perror("setsockopt");
-    exit(1);
-  }
-
-  bzero((char *)&server_addr, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-
-  char hostname[1024];
-  hostname[1023] = '\0';
-  gethostname(hostname, 1023);
-
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC; /*either IPV4 or IPV6*/
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_CANONNAME;
-
-  if ((getaddrinfo_res = getaddrinfo(hostname, "51717", &hints, &info)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(getaddrinfo_res));
-    exit(1);
-  }
-
-  char ip[100];
-  hostname_to_ip(hostname, ip);
-  inet_pton(AF_INET, ip, &(server_addr.sin_addr));
-
-  // As talked about in class, we hardcode this port value.
-  server_addr.sin_port = htons(51717); // <-- convert to BigEndian
-
-  // binding socket to specified port number:
-  if (bind(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) ==
-      -1) { // means it failed to bind... 0 on success, -1 if not
-    printf("Couldn't bind the port to the socket!\n");
-    exit(1);
-  }
-  // The listen system call allows the process to listen on the socket for
-  // connections.
-  if (listen(socketfd, 1) == -1) {
-    printf("Coudn't listen...\n");
-    exit(1);
-  }
-
-  freeaddrinfo(info);
-  printf("Waiting for a connection on %s port %d\n", ip, PORT);
-
-  // Make server listen indefinitely:
-  client_size = sizeof(client_addr);
-  if ((client_file_descriptor = accept(
-           socketfd, (struct sockaddr *)&client_addr, &client_size)) == -1) {
-    printf(
-        "Couldn't create the client socket. There was an error on accept.\n");
-    exit(1);
-  }
-
-  while (1) {
-
-    Packet recv_packet;
-    Packet send_packet;
-
-    char message_buffer[15000];
-    char recv_buffer[145];
-    char send_buffer[145];
-    bzero(&message_buffer, sizeof(message_buffer));
-    bzero(&recv_buffer, sizeof(recv_buffer));
-    bzero(&send_buffer, sizeof(send_buffer));
-
-    if ((rec = recv(client_file_descriptor, recv_buffer, sizeof(recv_buffer),
-                    0)) == -1) {
-      printf("Error recieving the data...\n");
-      exit(1);
-    }
-
-    de_serialize(recv_buffer, &recv_packet);
-    printf("Friend: %s", recv_packet.message);
-    free_packet(&recv_packet);
-
-    printf("\n");
-    printf("You: ");
-
-    do {
-      char *strang = fgets(message_buffer, 15000, stdin);
-      // initialize packet:
-      create_packet(&send_packet, strang);
-      bzero(strang, sizeof(*strang));
-    } while (verify_input(send_packet.string_length));
-
-    // serializing packet:
-    serialize(send_packet, send_buffer);
-
-    if ((sent = send(client_file_descriptor, send_buffer, sizeof(send_buffer),
-                     0)) == -1) {
-      printf("Wasn't able to send data... ERROR writing to the socket.\n");
-      exit(1);
-    }
-
-    free_packet(&send_packet);
-
-  } // done with while.
-}
-
-void client(const int port, const char *ip) {
-
-  int port_number, sent, rec;
-  struct sockaddr_in server_addr;
-
-  // obtain the port number:
-  port_number = port;
-  if (DEBUG)
-    printf("The client side, the port is: %d\n", port_number);
-  if (DEBUG)
-    printf("The client side, the port is: %s\n", ip);
-
-  // create the socket:
-  if ((client_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-    printf("Error creating socket...\n");
-    exit(1);
-  }
-
-  if (setsockopt(client_socket, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int)) ==
-      -1) {
-    perror("setsockopt");
-    exit(1);
-  }
-
-  // printf("second socket = %d\n", client_socket);
-
-  bzero((char *)&server_addr, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_addr(ip);
-  server_addr.sin_port = htons(port); // <-- convert to BigEndian.
-
-  // connecting to the server now...
-  if (connect(client_socket, (struct sockaddr *)&server_addr,
-              sizeof(server_addr)) == -1) {
-    printf("Error connecting to the server\n");
-    exit(1);
-  }
-
-  // if connected, display this messgae:
-  printf("Connecting to server... Connected!\n");
-  printf("Connected to a friend! You send first.\n");
-
-  // chat for an indefinite amount of time:
-  while (1) {
-    // client enters in their message:
-    printf("You: ");
-
-    // create Packet:
-    Packet send_packet, recv_packet;
-
-    char message_buffer[15000];
-    char send_buffer[145];
-    char recv_buffer[145];
-    bzero(&message_buffer, sizeof(message_buffer));
-    bzero(&recv_buffer, sizeof(recv_buffer));
-    bzero(&send_buffer, sizeof(send_buffer));
-
-    do {
-      char *strang = fgets(message_buffer, 15000, stdin);
-      // initialize packet:
-      create_packet(&send_packet, strang);
-      bzero(strang, sizeof(*strang));
-    } while (verify_input(send_packet.string_length));
-
-    // serialize packet before sending over:
-    serialize(send_packet, send_buffer);
-
-    if ((sent = send(client_socket, send_buffer, sizeof(send_buffer), 0)) ==
-        -1) {
-      printf("Error sending message to the server...\n");
-      exit(1);
-    }
-
-    if ((rec = recv(client_socket, recv_buffer, sizeof(recv_buffer), 0)) ==
-        -1) {
-      printf("Error recieving the data from the server...\n");
-      exit(1);
-    }
-
-    de_serialize(recv_buffer, &recv_packet);
-
-    printf("Friend: %s", recv_packet.message);
-    printf("\n");
-
-    free_packet(&send_packet);
-    free_packet(&recv_packet);
-
-  } // end of while.
-}
-
-int hostname_to_ip(char *hostname, char *ip) {
-  // using the hostent structure to find out what the hostname of the machine
-  // is:
-  struct hostent *he;
-  struct in_addr **addr_list;
-  int i;
-
-  if ((he = gethostbyname(hostname)) == NULL) {
-    // get the host info
-    printf("Couldn't retrive the hostname from the machine...\n");
-    return 1;
-  }
-  addr_list = (struct in_addr **)he->h_addr_list;
-  for (i = 0; addr_list[i] != NULL; i++) {
-    // Return the first one;
-    strcpy(ip, inet_ntoa(*addr_list[i]));
-    return 0;
-  }
-  return 1;
-}
-
-void process_cargs(const int argc, char *argv[], char *ip, int *port) {
-
-  int i;
-  for (i = 0; i < argc; i++) {
-    if (strcmp(argv[i], "-p") == 0)
-      *port = atoi(argv[i + 1]);
-    if (strcmp(argv[i], "-s") == 0)
-      strcpy(ip, argv[i + 1]);
-  }
-
-  // printf("port = %d\n", *port);
-  // printf("ip = %s\n",   ip);
-}
-
-int verify_input(const short input_length) {
-  // printf("input_length = %d\n", input_length);
-  if (input_length > 140) {
-    printf("Error: Input too long.\n");
-    printf("You: ");
-    return 1;
-  }
-  return 0;
-}
-
-void create_packet(Packet *pkt, char *input_buf) {
-
-  // setting version:
-  pkt->version = 457;
-  // setting string_length:
-  pkt->string_length = (int)strlen(input_buf);
-  // printf("the string length in create_packet: %d\n", pkt->string_length);
-  pkt->message = malloc(pkt->string_length);
-  // copying string into message field:
-  strcpy(pkt->message, input_buf);
-  // printf("printing out the message too: %s\n", pkt->message);
-}
-
-void free_packet(Packet *pkt) {
-  // free contents of packet:
-  free(pkt->message);
-}
-
-void serialize(Packet pkt, char *out_buffer) {
-
-  memcpy(out_buffer, &(pkt.version), sizeof(pkt.version));
-  memcpy((out_buffer + sizeof(pkt.version)), &(pkt.string_length),
-         sizeof(pkt.string_length));
-  memcpy((out_buffer + sizeof(pkt.version) + sizeof(pkt.string_length)),
-         pkt.message, pkt.string_length);
-
-  if (DEBUG) {
-    short v = 0;
-    short l = 0;
-    char *res = malloc(pkt.string_length + 2 + 2);
-
-    memcpy(&v, out_buffer, 2);
-    memcpy(&l, out_buffer + 2, 2);
-    memcpy(res, out_buffer + 4, pkt.string_length);
-
-    printf("v = %d\n", v);
-    printf("l = %d\n", l);
-    printf("string = %s\n", res);
-
-    printf("at the end\n");
-
-    free(res);
-  }
-}
-
-void de_serialize(char *in_buffer, Packet *pkt) {
-
-  // other way around:
-  memcpy(&(pkt->version), in_buffer, sizeof(short));
-  memcpy(&(pkt->string_length), (sizeof(short) + in_buffer), sizeof(short));
-  pkt->message = malloc(pkt->string_length);
-  memcpy(pkt->message, ((sizeof(short) * 2) + in_buffer), pkt->string_length);
-}
-
-void sig_handler(int signal) { // this isn't working...
-
-  printf("\nClosing all Sockets...\n");
-  close(socketfd);
-  close(client_file_descriptor);
-  close(client_socket);
-  free(ip);
-  exit(0);
+  return status;
 }
