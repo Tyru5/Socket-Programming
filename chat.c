@@ -40,14 +40,13 @@ static void on_signal(int signo) {
 }
 
 static void usage(FILE *out) {
-  fprintf(out,
-          "Usage: chat [-p port]           wait for a friend (server)\n"
-          "       chat -s host [-p port]   connect to a friend (client)\n"
-          "\n"
-          "Options:\n"
-          "  -p port  TCP port (default " DEFAULT_PORT ")\n"
-          "  -s host  hostname or IPv4/IPv6 address of the other node\n"
-          "  -h       show this help\n");
+  fprintf(out, "Usage: chat [-p port]           wait for a friend (server)\n"
+               "       chat -s host [-p port]   connect to a friend (client)\n"
+               "\n"
+               "Options:\n"
+               "  -p port  TCP port (default " DEFAULT_PORT ")\n"
+               "  -s host  hostname or IPv4/IPv6 address of the other node\n"
+               "  -h       show this help\n");
 }
 
 static bool valid_port(const char *s) {
@@ -221,8 +220,7 @@ static bool send_lines(int sock, char *buf, size_t *len, bool *too_long,
     size_t n = end - start;
 
     if (*too_long || n > MAX_MESSAGE)
-      fprintf(stderr, "Error: message too long (max %d bytes).\n",
-              MAX_MESSAGE);
+      fprintf(stderr, "Error: message too long (max %d bytes).\n", MAX_MESSAGE);
     else if (n > 0 && !send_message(sock, buf + start, n))
       return false;
     *too_long = false;
@@ -243,8 +241,7 @@ static bool send_lines(int sock, char *buf, size_t *len, bool *too_long,
 
 // Prints a received message, replacing control characters so a friend can't
 // send terminal escape sequences.
-static void print_message(const unsigned char *text, size_t len,
-                          bool prompt) {
+static void print_message(const unsigned char *text, size_t len, bool prompt) {
   char clean[MAX_MESSAGE];
   for (size_t i = 0; i < len; i++) {
     unsigned char c = text[i];
