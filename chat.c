@@ -375,10 +375,12 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
+
   if (optind < argc) {
     usage(stderr);
     return 1;
   }
+
   if (!valid_port(port)) {
     fprintf(stderr, "chat: invalid port '%s' (expected 1-65535)\n", port);
     return 1;
