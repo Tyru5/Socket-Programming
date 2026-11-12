@@ -1,4 +1,17 @@
-chat
-chat-asan
+# Zig
+.zig-cache/
+zig-cache/
+zig-out/
+zig-pkg/
+
+# C build (chat.c)
+/chat
+/chat-asan
 *.o
 *.dSYM/
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/

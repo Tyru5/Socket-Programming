@@ -22,6 +22,9 @@ pub fn main(init: std.process.Init) !void {
     zig_rewrite.printMessage();
     tsting.testing();
 
+    const name: []const u8 = "Tyrus Malmstrom";
+    std.debug.print("The length of this is: {d}\n", .{name.len});
+
     if (args.len < 2) {
         return error.MissingArg;
     }
