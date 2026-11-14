@@ -121,8 +121,10 @@ static void print_addresses(const char *port) {
 
 static int wait_for_friend(const char *port) {
   int listener = listen_on(port);
-  if (listener == -1)
+
+  if (listener == -1) {
     return -1;
+  }
   print_addresses(port);
 
   int fd;
@@ -133,6 +135,7 @@ static int wait_for_friend(const char *port) {
       break;
     }
   }
+
   close(listener); // one conversation per run
   return fd;
 }
@@ -140,6 +143,7 @@ static int wait_for_friend(const char *port) {
 static int connect_to(const char *host, const char *port) {
   struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM};
   struct addrinfo *res;
+
   int err = getaddrinfo(host, port, &hints, &res);
   if (err != 0) {
     fprintf(stderr, "chat: %s: %s\n", host, gai_strerror(err));
@@ -153,8 +157,9 @@ static int connect_to(const char *host, const char *port) {
       saved_errno = errno;
       continue;
     }
-    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0)
+    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) {
       break;
+    }
     saved_errno = errno;
     close(fd);
     fd = -1;
@@ -406,5 +411,6 @@ int main(int argc, char *argv[]) {
     printf("\nClosing connection.\n");
     status = 0;
   }
+
   return status;
 }
